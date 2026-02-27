@@ -11,27 +11,6 @@ export interface User {
   resumeUrl?: string
 }
 
-export interface Interview {
-  id: string
-  title: string
-  type: string
-  status: "scheduled" | "in-progress" | "completed" | "cancelled"
-  date: string
-  score?: number
-  duration?: string
-  difficulty: "easy" | "medium" | "hard"
-  questions?: InterviewQuestion[]
-}
-
-export interface InterviewQuestion {
-  id: string
-  text: string
-  category: string
-  difficulty: "easy" | "medium" | "hard"
-  timeLimit?: number
-  sampleAnswer?: string
-}
-
 export interface Exam {
   id: string
   title: string
@@ -56,7 +35,7 @@ export interface ExamQuestion {
 
 export interface Report {
   id: string
-  type: "interview" | "exam"
+  type: "exam"
   title: string
   date: string
   overallScore: number

@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
+import { useProctoringMonitor } from "@/lib/ai/use-proctoring"
 import {
   Clock,
   ChevronRight,
@@ -17,9 +18,9 @@ import {
   Flag,
   AlertTriangle,
   Camera,
-  Mic,
   Shield,
   Send,
+  Eye,
 } from "lucide-react"
 import {
   Dialog,
@@ -41,8 +42,44 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   const [flagged, setFlagged] = useState<Set<number>>(new Set())
   const [timeLeft, setTimeLeft] = useState((exam?.duration || 60) * 60)
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
-  const [warningCount, setWarningCount] = useState(0)
-  const [showWarning, setShowWarning] = useState(false)
+  const [examStartTime] = useState(Date.now())
+  const geminiKey = 'AIzaSyDfqEU4Bu-RlobqbZCEeV128BnlqPwogL4'
+
+  // Define handleSubmit before using it
+  const handleSubmit = async () => {
+    stopMonitoring()
+    
+    const duration = (Date.now() - examStartTime) / 1000
+    const response = await fetch(`/api/exam/${id}/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ violations, duration })
+    })
+    
+    const report = await response.json()
+    router.push(`/candidate/exams?submitted=true&score=${report.riskScore}`)
+  }
+
+  // AI Proctoring with auto-submit
+  const {
+    videoRef,
+    violations,
+    isMonitoring,
+    aiLoaded,
+    tabSwitchCount,
+    startMonitoring,
+    stopMonitoring
+  } = useProctoringMonitor(id, true, handleSubmit, geminiKey)
+
+  // Start AI monitoring when component mounts
+  useEffect(() => {
+    if (aiLoaded) {
+      startMonitoring()
+    }
+    return () => {
+      stopMonitoring()
+    }
+  }, [aiLoaded, startMonitoring, stopMonitoring])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -57,16 +94,6 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
     return () => clearInterval(timer)
   }, [])
 
-  // Simulate a proctoring warning
-  useEffect(() => {
-    const warningTimer = setTimeout(() => {
-      setWarningCount(1)
-      setShowWarning(true)
-      setTimeout(() => setShowWarning(false), 5000)
-    }, 30000)
-    return () => clearTimeout(warningTimer)
-  }, [])
-
   const formatTime = (s: number) => {
     const h = Math.floor(s / 3600)
     const m = Math.floor((s % 3600) / 60)
@@ -79,6 +106,8 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   const isLowTime = timeLeft < 300
   const answeredCount = Object.keys(answers).length
   const q = questions[currentQ]
+  const criticalViolations = violations.filter(v => v.severity === 'critical').length
+  const recentViolation = violations[violations.length - 1]
 
   const toggleFlag = () => {
     setFlagged((p) => {
@@ -87,10 +116,6 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
       else next.add(currentQ)
       return next
     })
-  }
-
-  const handleSubmit = () => {
-    router.push("/candidate/exams")
   }
 
   if (!exam) {
@@ -121,18 +146,26 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
 
           {/* Proctoring Indicators */}
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 rounded-full bg-success/10 px-2 py-1">
-              <Camera className="h-3 w-3 text-success" />
-              <span className="text-[10px] font-medium text-success">CAM</span>
+            <div className={`flex items-center gap-1 rounded-full px-2 py-1 ${
+              isMonitoring ? "bg-success/10" : "bg-secondary"
+            }`}>
+              <Camera className={`h-3 w-3 ${isMonitoring ? "text-success" : "text-muted-foreground"}`} />
+              <span className={`text-[10px] font-medium ${isMonitoring ? "text-success" : "text-muted-foreground"}`}>
+                {isMonitoring ? "AI" : "OFF"}
+              </span>
             </div>
-            <div className="flex items-center gap-1 rounded-full bg-success/10 px-2 py-1">
-              <Mic className="h-3 w-3 text-success" />
-              <span className="text-[10px] font-medium text-success">MIC</span>
+            <div className={`flex items-center gap-1 rounded-full px-2 py-1 ${
+              aiLoaded ? "bg-primary/10" : "bg-secondary"
+            }`}>
+              <Eye className={`h-3 w-3 ${aiLoaded ? "text-primary" : "text-muted-foreground"}`} />
+              <span className={`text-[10px] font-medium ${aiLoaded ? "text-primary" : "text-muted-foreground"}`}>
+                {aiLoaded ? "READY" : "LOAD"}
+              </span>
             </div>
-            {warningCount > 0 && (
+            {violations.length > 0 && (
               <div className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1">
                 <AlertTriangle className="h-3 w-3 text-destructive" />
-                <span className="text-[10px] font-medium text-destructive">{warningCount}</span>
+                <span className="text-[10px] font-medium text-destructive">{violations.length}</span>
               </div>
             )}
           </div>
@@ -144,17 +177,17 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* Warning Banner */}
-      {showWarning && (
+      {recentViolation && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 animate-in fade-in">
           <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
           <p className="text-xs text-destructive font-medium">
-            Warning: Tab switch detected. Please stay on the exam window. Repeated violations may result in exam termination.
+            {recentViolation.description}
           </p>
-          <button onClick={() => setShowWarning(false)} className="ml-auto text-xs text-destructive hover:underline shrink-0">
-            Dismiss
-          </button>
         </div>
       )}
+
+      {/* Hidden video for AI processing */}
+      <video ref={videoRef} className="hidden" playsInline muted />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         {/* Question Navigation Sidebar */}

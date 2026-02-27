@@ -32,16 +32,6 @@ export function StatusBadge({ label, variant = "default", className }: StatusBad
   )
 }
 
-export function getInterviewStatusVariant(status: string): StatusVariant {
-  switch (status) {
-    case "completed": return "success"
-    case "scheduled": return "info"
-    case "in-progress": return "warning"
-    case "cancelled": return "destructive"
-    default: return "default"
-  }
-}
-
 export function getExamStatusVariant(status: string): StatusVariant {
   switch (status) {
     case "completed": return "success"

@@ -6,7 +6,6 @@ import { useAppStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
-  Mic,
   FileText,
   BarChart3,
   UserCircle,
@@ -30,7 +29,6 @@ interface NavItem {
 
 const candidateNav: NavItem[] = [
   { label: "Dashboard", href: "/candidate/dashboard", icon: LayoutDashboard },
-  { label: "Interviews", href: "/candidate/interviews", icon: Mic },
   { label: "Exams", href: "/candidate/exams", icon: BookOpen },
   { label: "Reports", href: "/candidate/reports", icon: BarChart3 },
   { label: "Profile", href: "/candidate/profile", icon: UserCircle },

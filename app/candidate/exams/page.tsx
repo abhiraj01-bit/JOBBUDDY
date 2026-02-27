@@ -54,7 +54,7 @@ export default function ExamsPage() {
 
             <div className="flex gap-2">
               {exam.status === "not-started" && (
-                <Link href={`/candidate/exam/${exam.id}`} className="flex-1">
+                <Link href={`/candidate/exam/${exam.id}/verification`} className="flex-1">
                   <Button size="sm" className="w-full gap-1 text-xs">
                     <Play className="h-3 w-3" /> Start Exam
                   </Button>
