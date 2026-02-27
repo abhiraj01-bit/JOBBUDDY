@@ -13,6 +13,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { UserRole } from "@/lib/types"
 
+import Image from "next/image"
+
 interface Institution {
   id: string
   name: string
@@ -96,11 +98,11 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-            <Shield className="h-6 w-6 text-primary-foreground" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center">
+            <Image src="/logo.png" alt="Gradio" width={64} height={64} className="rounded-xl" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground">Create an account</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Get started with ProctorAI</p>
+          <p className="mt-1 text-sm text-muted-foreground">Get started with Gradio</p>
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">

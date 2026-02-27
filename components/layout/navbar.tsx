@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
+import Image from "next/image"
+
 export function Navbar() {
   const { state, dispatch } = useAppStore()
   const { isExamActive } = useExamStore()
@@ -58,10 +60,10 @@ export function Navbar() {
       </Button>
 
       <Link href={`/${state.user?.role || "candidate"}/dashboard`} className="flex items-center gap-2 shrink-0">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-          <Shield className="h-4 w-4 text-primary-foreground" />
+        <div className="flex h-8 w-8 items-center justify-center">
+          <Image src="/logo.png" alt="Gradio" width={32} height={32} className="rounded-lg" />
         </div>
-        <span className="hidden font-semibold text-foreground sm:inline-block text-sm tracking-tight">ProctorAI</span>
+        <span className="hidden font-semibold text-foreground sm:inline-block text-sm tracking-tight">Gradio</span>
       </Link>
 
       <div className="flex-1 flex items-center justify-center max-w-md mx-auto">

@@ -10,8 +10,12 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" })
 
 export const metadata: Metadata = {
-  title: 'ProctorAI - Intelligent Assessment Platform',
+  title: 'Gradio - Intelligent Assessment Platform',
   description: 'Enterprise-grade AI-powered proctoring, interviews, and assessment management platform',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 }
 
 export const viewport: Viewport = {

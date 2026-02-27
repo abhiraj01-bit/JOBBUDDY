@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+import Image from "next/image"
+
 export default function LoginPage() {
   const { dispatch } = useAppStore()
   const router = useRouter()
@@ -76,11 +78,11 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-            <Shield className="h-6 w-6 text-primary-foreground" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center">
+            <Image src="/logo.png" alt="Gradio" width={64} height={64} className="rounded-xl" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground">Welcome back</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in to your ProctorAI account</p>
+          <p className="mt-1 text-sm text-muted-foreground">Sign in to your Gradio account</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
