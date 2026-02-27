@@ -8,6 +8,7 @@ export interface User {
   avatar?: string
   phone?: string
   institution?: string
+  institutionId?: string
   resumeUrl?: string
 }
 

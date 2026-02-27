@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/lib/store"
@@ -9,15 +9,33 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { UserRole } from "@/lib/types"
+
+interface Institution {
+  id: string
+  name: string
+  region: string
+  country: string
+}
 
 export default function RegisterPage() {
   const { dispatch } = useAppStore()
   const router = useRouter()
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", role: "" as string })
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", role: "" as string, institutionId: "" })
+  const [institutions, setInstitutions] = useState<Institution[]>([])
+  const [open, setOpen] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    fetch('/api/institutions')
+      .then(res => res.json())
+      .then(data => setInstitutions(data.institutions || []))
+      .catch(() => setInstitutions([]))
+  }, [])
 
   const validate = () => {
     const errs: Record<string, string> = {}
@@ -28,6 +46,7 @@ export default function RegisterPage() {
     else if (form.password.length < 6) errs.password = "Minimum 6 characters"
     if (form.password !== form.confirmPassword) errs.confirmPassword = "Passwords do not match"
     if (!form.role) errs.role = "Select a role"
+    if (!form.institutionId) errs.institutionId = "Select an institution"
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -37,10 +56,35 @@ export default function RegisterPage() {
     if (!validate()) return
 
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 800))
+    
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          role: form.role,
+          institutionId: form.institutionId
+        })
+      })
 
-    dispatch({ type: "LOGIN", payload: form.role as UserRole })
-    router.push(`/${form.role}/dashboard`)
+      const data = await response.json()
+
+      if (!response.ok) {
+        setErrors({ email: data.error || 'Registration failed' })
+        setLoading(false)
+        return
+      }
+
+      // Success message and redirect to login
+      alert('Registration successful! Please login.')
+      router.push('/login')
+    } catch (error) {
+      setErrors({ email: 'Network error. Please try again.' })
+      setLoading(false)
+    }
   }
 
   const updateField = (key: string, value: string) => {
@@ -100,6 +144,45 @@ export default function RegisterPage() {
               </SelectContent>
             </Select>
             {errors.role && <p className="text-xs text-destructive">{errors.role}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-foreground">Institution</Label>
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={open}
+                  className={`w-full justify-between ${errors.institutionId ? "border-destructive" : ""}`}
+                >
+                  {form.institutionId
+                    ? institutions.find((i) => i.id === form.institutionId)?.name
+                    : "Select institution..."}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0">
+                <Command>
+                  <CommandInput placeholder="Search institution..." />
+                  <CommandEmpty>No institution found.</CommandEmpty>
+                  <CommandGroup className="max-h-64 overflow-auto">
+                    {institutions.map((institution) => (
+                      <CommandItem
+                        key={institution.id}
+                        value={institution.name}
+                        onSelect={() => {
+                          updateField("institutionId", institution.id)
+                          setOpen(false)
+                        }}
+                      >
+                        {institution.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {errors.institutionId && <p className="text-xs text-destructive">{errors.institutionId}</p>}
           </div>
 
           <div className="space-y-2">

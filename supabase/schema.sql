@@ -1,6 +1,16 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Institutions table
+CREATE TABLE institutions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT UNIQUE NOT NULL,
+  region TEXT NOT NULL,
+  country TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Users table
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -8,7 +18,7 @@ CREATE TABLE users (
   name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('candidate', 'institution', 'admin')),
   phone TEXT,
-  institution TEXT,
+  institution_id UUID REFERENCES institutions(id) NOT NULL,
   avatar_url TEXT,
   resume_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -123,6 +133,9 @@ CREATE TABLE audit_logs (
 );
 
 -- Indexes for performance
+CREATE INDEX idx_institutions_region ON institutions(region);
+CREATE INDEX idx_institutions_country ON institutions(country);
+CREATE INDEX idx_users_institution ON users(institution_id);
 CREATE INDEX idx_exams_institution ON exams(institution_id);
 CREATE INDEX idx_questions_exam ON questions(exam_id);
 CREATE INDEX idx_attempts_exam ON exam_attempts(exam_id);
@@ -136,6 +149,7 @@ CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
 CREATE INDEX idx_audit_logs_created ON audit_logs(created_at DESC);
 
 -- Enable Row Level Security
+ALTER TABLE institutions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
@@ -147,6 +161,10 @@ ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies (Basic - customize based on auth setup)
+-- Allow everyone to read institutions
+CREATE POLICY "Anyone can view institutions" ON institutions
+  FOR SELECT USING (true);
+
 -- Candidates can view their own data
 CREATE POLICY "Candidates can view own attempts" ON exam_attempts
   FOR SELECT USING (candidate_id = auth.uid()::uuid);
@@ -164,3 +182,24 @@ CREATE POLICY "Institutions can manage own exams" ON exams
 -- Admins can view everything (implement based on your auth)
 CREATE POLICY "Admins can view all audit logs" ON audit_logs
   FOR SELECT USING (true); -- Add admin check here
+
+-- Prepopulate North Indian Institutions
+INSERT INTO institutions (name, region, country) VALUES
+('IIT Delhi', 'North India', 'India'),
+('IIT Kanpur', 'North India', 'India'),
+('IIT Roorkee', 'North India', 'India'),
+('IIT BHU', 'North India', 'India'),
+('Delhi University', 'North India', 'India'),
+('Jawaharlal Nehru University', 'North India', 'India'),
+('Jamia Millia Islamia', 'North India', 'India'),
+('Punjab University', 'North India', 'India'),
+('Aligarh Muslim University', 'North India', 'India'),
+('Banaras Hindu University', 'North India', 'India'),
+('NIT Kurukshetra', 'North India', 'India'),
+('NIT Jalandhar', 'North India', 'India'),
+('NIT Hamirpur', 'North India', 'India'),
+('NIT Srinagar', 'North India', 'India'),
+('BITS Pilani', 'North India', 'India'),
+('IIIT Allahabad', 'North India', 'India'),
+('IIIT Delhi', 'North India', 'India'),
+('Chandigarh University', 'North India', 'India');

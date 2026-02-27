@@ -34,35 +34,43 @@ export default function LoginPage() {
     if (!validate()) return
 
     setLoading(true)
-    // Simulate API delay
-    await new Promise((r) => setTimeout(r, 800))
+    
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      })
 
-    const roleMap: Record<string, UserRole> = {
-      "arjun@example.com": "candidate",
-      "priya@iitd.edu": "institution",
-      "admin@proctora.ai": "admin",
-    }
+      const data = await response.json()
 
-    const role = roleMap[email]
-    if (role) {
-      dispatch({ type: "LOGIN", payload: role })
-      router.push(`/${role}/dashboard`)
-    } else {
-      setErrors({ general: "Invalid credentials. Try arjun@example.com, priya@iitd.edu, or admin@proctora.ai" })
+      if (!response.ok) {
+        setErrors({ general: data.error || 'Login failed' })
+        setLoading(false)
+        return
+      }
+
+      // Create user object
+      const user = {
+        id: data.user.id,
+        name: data.name,
+        email: data.user.email,
+        role: data.role as UserRole,
+        phone: data.phone,
+        institution: data.institution,
+        institutionId: data.institutionId,
+        avatar: data.user.user_metadata?.avatar_url || undefined
+      }
+
+      dispatch({ type: "LOGIN", payload: { role: data.role as UserRole, user } })
+      router.push(`/${data.role}/dashboard`)
+    } catch (error) {
+      setErrors({ general: 'Network error. Please try again.' })
       setLoading(false)
     }
   }
 
-  const quickLogin = (role: UserRole) => {
-    const emails: Record<UserRole, string> = {
-      candidate: "arjun@example.com",
-      institution: "priya@iitd.edu",
-      admin: "admin@proctora.ai",
-    }
-    setEmail(emails[role])
-    setPassword("password123")
-    setErrors({})
-  }
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -127,21 +135,6 @@ export default function LoginPage() {
             Sign in
           </Button>
         </form>
-
-        <div className="mt-6">
-          <p className="mb-3 text-center text-xs text-muted-foreground">Quick login as:</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => quickLogin("candidate")}>
-              Candidate
-            </Button>
-            <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => quickLogin("institution")}>
-              Institution
-            </Button>
-            <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => quickLogin("admin")}>
-              Admin
-            </Button>
-          </div>
-        </div>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {"Don't have an account? "}

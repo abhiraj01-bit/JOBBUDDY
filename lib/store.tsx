@@ -13,12 +13,12 @@ interface AppState {
 }
 
 type AppAction =
-  | { type: "LOGIN"; payload: UserRole }
+  | { type: "LOGIN"; payload: { role: UserRole; user: User } }
   | { type: "LOGOUT" }
   | { type: "TOGGLE_SIDEBAR" }
   | { type: "MARK_NOTIFICATION_READ"; payload: string }
   | { type: "MARK_ALL_NOTIFICATIONS_READ" }
-  | { type: "HYDRATE"; payload: { role: UserRole } }
+  | { type: "HYDRATE"; payload: { role: UserRole; user: User } }
   | { type: "HYDRATE_ONLY" }
 
 const initialState: AppState = {
@@ -29,20 +29,20 @@ const initialState: AppState = {
   hydrated: false,
 }
 
-function persistRole(role: UserRole | null) {
+function persistUser(user: User | null) {
   try {
-    if (role) {
-      sessionStorage.setItem("proctorai_role", role)
+    if (user) {
+      sessionStorage.setItem("proctorai_user", JSON.stringify(user))
     } else {
-      sessionStorage.removeItem("proctorai_role")
+      sessionStorage.removeItem("proctorai_user")
     }
   } catch {}
 }
 
-function getPersistedRole(): UserRole | null {
+function getPersistedUser(): User | null {
   try {
-    const role = sessionStorage.getItem("proctorai_role")
-    if (role === "candidate" || role === "institution" || role === "admin") return role
+    const userData = sessionStorage.getItem("proctorai_user")
+    if (userData) return JSON.parse(userData)
   } catch {}
   return null
 }
@@ -50,16 +50,16 @@ function getPersistedRole(): UserRole | null {
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "LOGIN": {
-      persistRole(action.payload)
+      persistUser(action.payload.user)
       return {
         ...state,
-        user: mockUsers[action.payload],
+        user: action.payload.user,
         isAuthenticated: true,
         hydrated: true,
       }
     }
     case "LOGOUT": {
-      persistRole(null)
+      persistUser(null)
       return {
         ...state,
         user: null,
@@ -69,7 +69,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "HYDRATE": {
       return {
         ...state,
-        user: mockUsers[action.payload.role],
+        user: action.payload.user,
         isAuthenticated: true,
         hydrated: true,
       }
@@ -110,14 +110,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState)
 
   useEffect(() => {
-    const role = getPersistedRole()
-    if (role) {
-      dispatch({ type: "HYDRATE", payload: { role } })
+    const user = getPersistedUser()
+    if (user) {
+      dispatch({ type: "HYDRATE", payload: { role: user.role, user } })
     } else {
-      // No persisted role - just mark as hydrated without logging in
       dispatch({ type: "HYDRATE_ONLY" })
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
