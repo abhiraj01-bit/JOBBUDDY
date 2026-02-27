@@ -3,12 +3,12 @@
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import { mockExams, mockExamQuestions } from "@/lib/mock-data"
+import { useExamStore } from "@/lib/store/exam-store"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { useProctoringMonitor } from "@/lib/ai/use-proctoring"
 import {
   Clock,
@@ -34,6 +34,7 @@ import {
 export default function ExamAttemptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { startExam, endExam } = useExamStore()
   const exam = mockExams.find((e) => e.id === id)
   const questions = exam?.questions || mockExamQuestions.slice(0, 5)
 
@@ -43,11 +44,13 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   const [timeLeft, setTimeLeft] = useState((exam?.duration || 60) * 60)
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
   const [examStartTime] = useState(Date.now())
-  const geminiKey = 'AIzaSyDfqEU4Bu-RlobqbZCEeV128BnlqPwogL4'
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const geminiKey = 'AIzaSyAQZxE2RvdUP42Q1SWNWbxMp_pcJcs3H7k'
 
   // Define handleSubmit before using it
   const handleSubmit = async () => {
     stopMonitoring()
+    endExam()
     
     const duration = (Date.now() - examStartTime) / 1000
     const response = await fetch(`/api/exam/${id}/report`, {
@@ -71,21 +74,103 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
     stopMonitoring
   } = useProctoringMonitor(id, true, handleSubmit, geminiKey)
 
-  // Start AI monitoring when component mounts
+  // Start exam lock and AI monitoring
   useEffect(() => {
-    if (aiLoaded) {
+    startExam(id)
+    if (aiLoaded && !isMonitoring) {
       startMonitoring()
     }
     return () => {
       stopMonitoring()
+      endExam()
     }
-  }, [aiLoaded, startMonitoring, stopMonitoring])
+  }, [aiLoaded, id, startExam, endExam])
+
+  // Enter fullscreen and lock exam
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      try {
+        await document.documentElement.requestFullscreen()
+        setIsFullscreen(true)
+      } catch (err) {
+        console.error('Fullscreen error:', err)
+      }
+    }
+    
+    enterFullscreen()
+    
+    // Detect fullscreen exit
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullscreen(false)
+        alert('You must stay in fullscreen mode during the exam!')
+        enterFullscreen()
+      }
+    }
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    
+    // Prevent navigation
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = 'Are you sure you want to leave? Your exam will be submitted.'
+      return e.returnValue
+    }
+    
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    // Disable back button
+    window.history.pushState(null, '', window.location.href)
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href)
+      alert('Navigation is disabled during the exam!')
+    }
+    window.addEventListener('popstate', handlePopState)
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('popstate', handlePopState)
+      if (document.fullscreenElement) {
+        document.exitFullscreen()
+      }
+    }
+  }, [])
+
+  // Prevent F11, F12, Ctrl+Shift+I, etc.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent F11 (fullscreen toggle)
+      if (e.key === 'F11') {
+        e.preventDefault()
+      }
+      // Prevent F12 (DevTools)
+      if (e.key === 'F12') {
+        e.preventDefault()
+      }
+      // Prevent Ctrl+Shift+I (DevTools)
+      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+        e.preventDefault()
+      }
+      // Prevent Ctrl+Shift+C (Inspect)
+      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+        e.preventDefault()
+      }
+      // Prevent Ctrl+U (View Source)
+      if (e.ctrlKey && e.key === 'u') {
+        e.preventDefault()
+      }
+    }
+    
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((p) => {
         if (p <= 0) {
-          setShowSubmitDialog(true)
+          handleSubmit()
           return 0
         }
         return p - 1
@@ -120,16 +205,24 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
 
   if (!exam) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center py-20">
-          <p className="text-muted-foreground">Exam not found.</p>
-        </div>
-      </DashboardLayout>
+      <div className="flex items-center justify-center py-20">
+        <p className="text-muted-foreground">Exam not found.</p>
+      </div>
     )
   }
 
   return (
-    <DashboardLayout>
+    <div className="min-h-screen bg-background p-4">
+      {/* Exam Lock Warning */}
+      {!isFullscreen && (
+        <div className="fixed inset-0 bg-destructive/90 z-50 flex items-center justify-center">
+          <div className="text-center text-white">
+            <AlertTriangle className="h-16 w-16 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Fullscreen Required</h2>
+            <p>You must remain in fullscreen mode during the exam</p>
+          </div>
+        </div>
+      )}
       {/* Fixed Timer Header */}
       <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
         isLowTime ? "border-destructive/30 bg-destructive/5" : "border-border bg-card"
@@ -143,51 +236,30 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
             <Clock className={`h-4 w-4 ${isLowTime ? "animate-pulse" : ""}`} />
             {formatTime(timeLeft)}
           </div>
-
-          {/* Proctoring Indicators */}
-          <div className="flex items-center gap-1.5">
-            <div className={`flex items-center gap-1 rounded-full px-2 py-1 ${
-              isMonitoring ? "bg-success/10" : "bg-secondary"
-            }`}>
-              <Camera className={`h-3 w-3 ${isMonitoring ? "text-success" : "text-muted-foreground"}`} />
-              <span className={`text-[10px] font-medium ${isMonitoring ? "text-success" : "text-muted-foreground"}`}>
-                {isMonitoring ? "AI" : "OFF"}
-              </span>
-            </div>
-            <div className={`flex items-center gap-1 rounded-full px-2 py-1 ${
-              aiLoaded ? "bg-primary/10" : "bg-secondary"
-            }`}>
-              <Eye className={`h-3 w-3 ${aiLoaded ? "text-primary" : "text-muted-foreground"}`} />
-              <span className={`text-[10px] font-medium ${aiLoaded ? "text-primary" : "text-muted-foreground"}`}>
-                {aiLoaded ? "READY" : "LOAD"}
-              </span>
-            </div>
-            {violations.length > 0 && (
-              <div className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1">
-                <AlertTriangle className="h-3 w-3 text-destructive" />
-                <span className="text-[10px] font-medium text-destructive">{violations.length}</span>
-              </div>
-            )}
-          </div>
-
           <Button size="sm" className="text-xs gap-1" onClick={() => setShowSubmitDialog(true)}>
             <Send className="h-3 w-3" /> Submit
           </Button>
         </div>
       </div>
 
-      {/* Warning Banner */}
-      {recentViolation && (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 animate-in fade-in">
-          <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-          <p className="text-xs text-destructive font-medium">
-            {recentViolation.description}
-          </p>
-        </div>
-      )}
 
-      {/* Hidden video for AI processing */}
-      <video ref={videoRef} className="hidden" playsInline muted />
+
+      {/* Camera preview - bottom right corner */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <div className="relative rounded-lg overflow-hidden border-2 border-primary shadow-lg bg-black">
+          <video 
+            ref={videoRef} 
+            className="w-48 h-36 object-cover" 
+            playsInline 
+            muted 
+            autoPlay
+          />
+          <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full">
+            <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-[10px] text-white font-medium">LIVE</span>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         {/* Question Navigation Sidebar */}
@@ -337,6 +409,6 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </div>
   )
 }

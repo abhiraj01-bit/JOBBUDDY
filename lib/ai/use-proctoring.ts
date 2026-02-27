@@ -26,10 +26,12 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
   // Initialize Gemini AI
   useEffect(() => {
     const initAI = async () => {
-      const key = geminiKey || 'AIzaSyDfqEU4Bu-RlobqbZCEeV128BnlqPwogL4'
+      const key = geminiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyAQZxE2RvdUP42Q1SWNWbxMp_pcJcs3H7k'
       await geminiProctoring.initialize(key)
       setAiLoaded(true)
       console.log('✅ Gemini AI Proctoring initialized')
+      
+      voiceWarning.enable()
       voiceWarning.info('AI proctoring system activated. Please remain in front of the camera.')
     }
     
@@ -38,11 +40,22 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
 
   // Add violation with voice warning
   const addViolation = useCallback((violation: Violation) => {
-    setViolations(prev => [...prev, violation])
+    setViolations(prev => {
+      const newViolations = [...prev, violation]
+      
+      // Auto-terminate after 5 violations
+      if (newViolations.length >= 5 && onAutoSubmit) {
+        voiceWarning.critical('Too many violations detected. Your exam is being terminated and submitted automatically.')
+        setTimeout(() => onAutoSubmit(), 2000)
+        return newViolations
+      }
+      
+      return newViolations
+    })
     
-    // Voice warnings
+    // Voice warnings - reduced cooldown to 1 second
     const now = Date.now()
-    if (now - lastViolationTime.current > 3000) {
+    if (now - lastViolationTime.current > 1000) {
       if (violation.severity === 'critical') {
         voiceWarning.critical(violation.description)
         setCriticalViolationCount(prev => {
@@ -55,6 +68,8 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
         })
       } else if (violation.severity === 'high' || violation.severity === 'medium') {
         voiceWarning.warning(violation.description)
+      } else {
+        voiceWarning.info(violation.description)
       }
       lastViolationTime.current = now
     }
@@ -62,20 +77,19 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
 
   // Start camera
   const startCamera = useCallback(async () => {
+    if (videoRef.current?.srcObject) {
+      return true // Already started
+    }
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480 },
-        audio: true
+        video: { width: 640, height: 480, facingMode: 'user' },
+        audio: false
       })
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        // Wait for video to be ready before playing
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().catch(err => {
-            console.error('Video play error:', err)
-          })
-        }
+        await videoRef.current.play()
       }
       
       return true
@@ -85,49 +99,27 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
     }
   }, [])
 
-  // Monitor with Gemini AI - FULLY AUTONOMOUS
+  // Monitor with Gemini AI - DISABLED DUE TO QUOTA
   const monitorFrame = useCallback(async () => {
-    if (!videoRef.current || !aiLoaded || !isMonitoring) return
-
-    try {
-      // Capture frame
-      const ctx = canvasRef.current.getContext('2d')
-      if (!ctx) return
-      
-      canvasRef.current.width = videoRef.current.videoWidth
-      canvasRef.current.height = videoRef.current.videoHeight
-      ctx.drawImage(videoRef.current, 0, 0)
-      
-      const imageData = canvasRef.current.toDataURL('image/jpeg', 0.6)
-      
-      // Gemini AI autonomous analysis
-      const result = await geminiProctoring.analyzeFrame(imageData)
-      
-      if (!result.isValid && result.violations.length > 0) {
-        result.violations.forEach(v => {
-          addViolation({
-            type: v.type,
-            severity: v.severity,
-            description: v.description,
-            timestamp: new Date().toISOString(),
-            confidence: v.confidence
-          })
-        })
-      }
-    } catch (error) {
-      console.error('Gemini AI Monitoring error:', error)
-    }
-  }, [aiLoaded, isMonitoring, addViolation])
+    return // Disabled
+  }, [])
 
   // Start monitoring
   const startMonitoring = useCallback(async () => {
     if (!isActive || isMonitoring) return
 
     const cameraStarted = await startCamera()
-    if (!cameraStarted) return
+    if (!cameraStarted) {
+      console.error('Failed to start camera')
+      return
+    }
 
     setIsMonitoring(true)
-    monitoringInterval.current = setInterval(monitorFrame, 2000)
+    
+    // Start monitoring after camera is ready
+    setTimeout(() => {
+      monitoringInterval.current = setInterval(monitorFrame, 3000)
+    }, 1000)
   }, [isActive, isMonitoring, startCamera, monitorFrame])
 
   // Stop monitoring
@@ -183,6 +175,7 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
         description: 'Window lost focus',
         timestamp: new Date().toISOString()
       })
+      voiceWarning.warning('Do not switch to other windows during the exam.')
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -218,15 +211,29 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
       })
       voiceWarning.warning('Copy and paste is not allowed during the exam.')
     }
+    
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        addViolation({
+          type: 'FULLSCREEN_EXIT',
+          severity: 'critical',
+          description: 'Exited fullscreen mode',
+          timestamp: new Date().toISOString()
+        })
+        voiceWarning.critical('You must remain in fullscreen mode during the exam.')
+      }
+    }
 
     document.addEventListener('contextmenu', handleContextMenu)
     document.addEventListener('copy', handleCopy)
     document.addEventListener('cut', handleCopy)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
 
     return () => {
       document.removeEventListener('contextmenu', handleContextMenu)
       document.removeEventListener('copy', handleCopy)
       document.removeEventListener('cut', handleCopy)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
   }, [isActive, addViolation])
 
@@ -234,7 +241,8 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
   useEffect(() => {
     return () => {
       stopMonitoring()
-      voiceWarning.disable()
+      // Don't disable voice on cleanup - keep it active
+      // voiceWarning.disable()
     }
   }, [stopMonitoring])
 

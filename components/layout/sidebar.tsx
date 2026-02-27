@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAppStore } from "@/lib/store"
+import { useExamStore } from "@/lib/store/exam-store"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -61,6 +62,7 @@ function getNavItems(role: string | undefined): NavItem[] {
 
 export function AppSidebar() {
   const { state, dispatch } = useAppStore()
+  const { isExamActive } = useExamStore()
   const pathname = usePathname()
   const navItems = getNavItems(state.user?.role)
   const collapsed = state.sidebarCollapsed
@@ -88,28 +90,58 @@ export function AppSidebar() {
             {navItems.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
               const Icon = item.icon
+              const disabled = isExamActive
 
               return collapsed ? (
                 <Tooltip key={item.href}>
                   <TooltipTrigger asChild>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex h-10 w-full items-center justify-center rounded-md transition-colors",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                      )}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      <Icon className="h-5 w-5" />
-                      <span className="sr-only">{item.label}</span>
-                    </Link>
+                    {disabled ? (
+                      <div
+                        className={cn(
+                          "flex h-10 w-full items-center justify-center rounded-md transition-colors cursor-not-allowed opacity-50",
+                          isActive
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground"
+                        )}
+                        aria-disabled="true"
+                      >
+                        <Icon className="h-5 w-5" />
+                        <span className="sr-only">{item.label}</span>
+                      </div>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex h-10 w-full items-center justify-center rounded-md transition-colors",
+                          isActive
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        )}
+                        aria-current={isActive ? "page" : undefined}
+                      >
+                        <Icon className="h-5 w-5" />
+                        <span className="sr-only">{item.label}</span>
+                      </Link>
+                    )}
                   </TooltipTrigger>
                   <TooltipContent side="right" className="text-xs">
-                    {item.label}
+                    {disabled ? "Navigation is disabled during an active exam" : item.label}
                   </TooltipContent>
                 </Tooltip>
+              ) : disabled ? (
+                <div
+                  key={item.href}
+                  className={cn(
+                    "flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors cursor-not-allowed opacity-50",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground"
+                  )}
+                  aria-disabled="true"
+                >
+                  <Icon className="h-5 w-5 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </div>
               ) : (
                 <Link
                   key={item.href}
@@ -137,6 +169,7 @@ export function AppSidebar() {
             className="w-full justify-center"
             onClick={() => dispatch({ type: "TOGGLE_SIDEBAR" })}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            disabled={isExamActive}
           >
             {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>

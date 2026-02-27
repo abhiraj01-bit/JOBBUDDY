@@ -5,41 +5,66 @@ export class VoiceWarningService {
   constructor() {
     if (typeof window !== 'undefined') {
       this.synth = window.speechSynthesis
+      console.log('🔊 Voice Warning System Ready')
     }
   }
 
   speak(text: string, priority: 'low' | 'medium' | 'high' = 'medium') {
-    if (!this.synth || !this.enabled) return
-
-    // Cancel previous speech for high priority
-    if (priority === 'high') {
-      this.synth.cancel()
-    }
-
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.rate = 1.0
-    utterance.pitch = 1.0
-    utterance.volume = 1.0
+    console.log('🔊 ATTEMPTING TO SPEAK:', text)
     
-    // Set voice urgency
-    if (priority === 'high') {
-      utterance.rate = 1.2
-      utterance.pitch = 1.1
+    if (!this.synth) {
+      console.error('❌ Speech synthesis not available')
+      return
     }
 
-    this.synth.speak(utterance)
+    if (!this.enabled) {
+      console.log('🔇 Voice disabled')
+      return
+    }
+
+    try {
+      // Cancel all previous speech
+      this.synth.cancel()
+
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = 1.0
+      utterance.pitch = 1.0
+      utterance.volume = 1.0
+      utterance.lang = 'en-US'
+      
+      utterance.onstart = () => {
+        console.log('✅ Speech started:', text)
+      }
+      
+      utterance.onend = () => {
+        console.log('✅ Speech ended')
+      }
+      
+      utterance.onerror = (e) => {
+        console.error('❌ Speech error:', e)
+      }
+
+      this.synth.speak(utterance)
+      console.log('✅ Speech queued')
+    } catch (error) {
+      console.error('❌ Speech exception:', error)
+    }
   }
 
   warning(message: string) {
-    this.speak(`Warning: ${message}`, 'high')
+    this.speak(`Warning. ${message}`, 'high')
   }
 
   critical(message: string) {
-    this.speak(`Critical violation: ${message}`, 'high')
+    this.speak(`Critical violation. ${message}`, 'high')
   }
 
   info(message: string) {
     this.speak(message, 'low')
+  }
+
+  test() {
+    this.speak('Voice warning test. If you can hear this, voice warnings are working.', 'high')
   }
 
   disable() {
