@@ -45,7 +45,7 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
   const [examStartTime] = useState(Date.now())
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const geminiKey = 'AIzaSyAQZxE2RvdUP42Q1SWNWbxMp_pcJcs3H7k'
+  const geminiKey = 'AIzaSyANJUuPRmsTQaZgeixHaiamxCqd7b6VTGc'
 
   // Define handleSubmit before using it
   const handleSubmit = async () => {

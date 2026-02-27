@@ -26,7 +26,7 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
   // Initialize Gemini AI
   useEffect(() => {
     const initAI = async () => {
-      const key = geminiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyAQZxE2RvdUP42Q1SWNWbxMp_pcJcs3H7k'
+      const key = geminiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyANJUuPRmsTQaZgeixHaiamxCqd7b6VTGc'
       await geminiProctoring.initialize(key)
       setAiLoaded(true)
       console.log('✅ Gemini AI Proctoring initialized')
@@ -99,10 +99,37 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
     }
   }, [])
 
-  // Monitor with Gemini AI - DISABLED DUE TO QUOTA
+  // Monitor with Gemini AI
   const monitorFrame = useCallback(async () => {
-    return // Disabled
-  }, [])
+    if (!videoRef.current || !aiLoaded || !isMonitoring) return
+
+    try {
+      const ctx = canvasRef.current.getContext('2d')
+      if (!ctx) return
+      
+      canvasRef.current.width = videoRef.current.videoWidth
+      canvasRef.current.height = videoRef.current.videoHeight
+      ctx.drawImage(videoRef.current, 0, 0)
+      
+      const imageData = canvasRef.current.toDataURL('image/jpeg', 0.6)
+      
+      const result = await geminiProctoring.analyzeFrame(imageData)
+      
+      if (!result.isValid && result.violations.length > 0) {
+        result.violations.forEach(v => {
+          addViolation({
+            type: v.type,
+            severity: v.severity,
+            description: v.description,
+            timestamp: new Date().toISOString(),
+            confidence: v.confidence
+          })
+        })
+      }
+    } catch (error) {
+      console.error('Gemini AI Monitoring error:', error)
+    }
+  }, [aiLoaded, isMonitoring, addViolation])
 
   // Start monitoring
   const startMonitoring = useCallback(async () => {
