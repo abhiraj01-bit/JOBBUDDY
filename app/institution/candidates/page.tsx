@@ -1,24 +1,18 @@
 "use client"
 
+import { useState, useEffect } from "react"
+import { useAppStore } from "@/lib/store"
 import { PageHeader } from "@/components/shared/page-header"
 import { DataTable } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Download, Upload } from "lucide-react"
-import { useState } from "react"
+import { Search, Download, Users as UsersIcon } from "lucide-react"
+import { createClient } from '@supabase/supabase-js'
 
-const allCandidates = [
-  { id: "c1", name: "Arjun Mehta", email: "arjun@example.com", institution: "IIT Delhi", examsCompleted: 4, avgScore: 82, status: "Active", riskLevel: "Low" },
-  { id: "c2", name: "Sneha Gupta", email: "sneha@example.com", institution: "IIT Delhi", examsCompleted: 5, avgScore: 91, status: "Active", riskLevel: "Low" },
-  { id: "c3", name: "Rahul Singh", email: "rahul@example.com", institution: "IIT Delhi", examsCompleted: 3, avgScore: 67, status: "Active", riskLevel: "Medium" },
-  { id: "c4", name: "Priya Verma", email: "priya.v@example.com", institution: "IIT Delhi", examsCompleted: 4, avgScore: 74, status: "Active", riskLevel: "Low" },
-  { id: "c5", name: "Amit Kumar", email: "amit@example.com", institution: "IIT Delhi", examsCompleted: 2, avgScore: 58, status: "Inactive", riskLevel: "High" },
-  { id: "c6", name: "Kavita Sharma", email: "kavita@example.com", institution: "IIT Delhi", examsCompleted: 6, avgScore: 88, status: "Active", riskLevel: "Low" },
-  { id: "c7", name: "Deepak Joshi", email: "deepak@example.com", institution: "IIT Delhi", examsCompleted: 1, avgScore: 45, status: "Active", riskLevel: "High" },
-  { id: "c8", name: "Meera Nair", email: "meera@example.com", institution: "IIT Delhi", examsCompleted: 3, avgScore: 72, status: "Active", riskLevel: "Medium" },
-]
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const columns = [
   {
@@ -31,8 +25,20 @@ const columns = [
       </div>
     ),
   },
-  { key: "examsCompleted", header: "Exams", render: (item: Record<string, unknown>) => <span className="text-sm text-foreground">{String(item.examsCompleted)}</span> },
-  { key: "avgScore", header: "Avg Score", render: (item: Record<string, unknown>) => <span className="text-sm font-medium text-foreground">{String(item.avgScore)}%</span> },
+  { 
+    key: "examsCompleted", 
+    header: "Exams", 
+    render: (item: Record<string, unknown>) => <span className="text-sm text-foreground">{String(item.examsCompleted)}</span> 
+  },
+  { 
+    key: "avgScore", 
+    header: "Avg Score", 
+    render: (item: Record<string, unknown>) => (
+      <span className="text-sm font-medium text-foreground">
+        {item.avgScore ? `${String(item.avgScore)}%` : 'N/A'}
+      </span>
+    )
+  },
   {
     key: "status",
     header: "Status",
@@ -40,27 +46,54 @@ const columns = [
       <StatusBadge label={String(item.status)} variant={item.status === "Active" ? "success" : "default"} />
     ),
   },
-  {
-    key: "riskLevel",
-    header: "Risk",
-    render: (item: Record<string, unknown>) => (
-      <StatusBadge
-        label={String(item.riskLevel)}
-        variant={item.riskLevel === "Low" ? "success" : item.riskLevel === "Medium" ? "warning" : "destructive"}
-      />
-    ),
-  },
 ]
 
 export default function InstitutionCandidatesPage() {
+  const { state } = useAppStore()
+  const [candidates, setCandidates] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
 
-  const filtered = allCandidates.filter((c) => {
+  useEffect(() => {
+    fetchCandidates()
+  }, [])
+
+  const fetchCandidates = async () => {
+    try {
+      const res = await fetch(`/api/institution/candidates?institutionId=${state.user?.institutionId}`)
+      const data = await res.json()
+      
+      if (data.candidates) {
+        setCandidates(data.candidates)
+      }
+    } catch (error) {
+      console.error('Failed to fetch candidates:', error)
+    }
+    setLoading(false)
+  }
+
+  const filtered = candidates.filter((c) => {
     const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === "all" || c.status.toLowerCase() === statusFilter
     return matchSearch && matchStatus
   })
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader
+          title="Candidates"
+          description="View and manage all registered candidates."
+          breadcrumbs={[
+            { label: "Dashboard", href: "/institution/dashboard" },
+            { label: "Candidates" },
+          ]}
+        />
+        <div className="text-center py-12 text-muted-foreground">Loading candidates...</div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -75,9 +108,6 @@ export default function InstitutionCandidatesPage() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-1 text-xs">
               <Download className="h-3 w-3" /> Export
-            </Button>
-            <Button size="sm" className="gap-1 text-xs">
-              <Upload className="h-3 w-3" /> Import
             </Button>
           </div>
         }
@@ -105,7 +135,14 @@ export default function InstitutionCandidatesPage() {
         </Select>
       </div>
 
-      <DataTable columns={columns} data={filtered as unknown as Record<string, unknown>[]} />
+      {filtered.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <UsersIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>No candidates found</p>
+        </div>
+      ) : (
+        <DataTable columns={columns} data={filtered as unknown as Record<string, unknown>[]} />
+      )}
     </>
   )
 }
