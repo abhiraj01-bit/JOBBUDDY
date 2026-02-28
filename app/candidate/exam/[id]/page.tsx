@@ -11,6 +11,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { useProctoringMonitor } from "@/lib/ai/use-proctoring"
+import { useFaceVerification } from "@/lib/ai/use-face-verification"
+import { FaceEnrollment } from "@/components/exam/face-enrollment"
 import {
   Clock,
   ChevronRight,
@@ -42,6 +44,8 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
+  const [faceEnrolled, setFaceEnrolled] = useState(false)
+  const [showFaceEnrollment, setShowFaceEnrollment] = useState(false)
 
   const [currentQ, setCurrentQ] = useState(0)
   const [answers, setAnswers] = useState<Record<number, string>>({})
@@ -118,6 +122,14 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
     stopMonitoring
   } = useProctoringMonitor(id, hasStarted, handleSubmit, geminiKey)
 
+  // Face Verification (uses same video as proctoring)
+  const {
+    violations: faceViolations,
+    isVerifying,
+    startVerification,
+    stopVerification
+  } = useFaceVerification(attemptId || '', handleSubmit)
+
   // Start exam lock and AI monitoring
   useEffect(() => {
     if (hasStarted && !attemptId && !creatingAttempt) {
@@ -150,20 +162,24 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
       createAttempt()
     }
 
-    if (hasStarted && attemptId) {
+    if (hasStarted && attemptId && faceEnrolled) {
       startExam(id)
       setExamStartTime(Date.now())
       if (aiLoaded && !isMonitoring) {
         startMonitoring()
       }
+      if (!isVerifying) {
+        startVerification()
+      }
     }
     return () => {
       if (hasStarted) {
         stopMonitoring()
+        stopVerification()
         endExam()
       }
     }
-  }, [hasStarted, attemptId, creatingAttempt, aiLoaded, id, startExam, endExam, state.user?.id])
+  }, [hasStarted, attemptId, creatingAttempt, aiLoaded, faceEnrolled, id, startExam, endExam, state.user?.id])
 
   // Enter fullscreen and lock exam
   useEffect(() => {
@@ -309,17 +325,36 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
           <Button
             size="lg"
             className="w-full"
-            onClick={() => setHasStarted(true)}
+            onClick={() => setShowFaceEnrollment(true)}
           >
             Enter Fullscreen & Begin
           </Button>
         </div>
+        {showFaceEnrollment && (
+          <FaceEnrollment
+            examId={id}
+            candidateId={state.user?.id || ''}
+            onSuccess={async () => {
+              setFaceEnrolled(true)
+              setShowFaceEnrollment(false)
+              // Enter fullscreen automatically
+              try {
+                await document.documentElement.requestFullscreen()
+                setIsFullscreen(true)
+              } catch (err) {
+                console.error('Fullscreen error:', err)
+              }
+              setHasStarted(true)
+            }}
+            onCancel={() => setShowFaceEnrollment(false)}
+          />
+        )}
       </div>
     )
   }
 
   // Show loading while creating attempt
-  if (hasStarted && !attemptId) {
+  if (hasStarted && (!attemptId || !faceEnrolled)) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center p-8 border border-border rounded-xl bg-card max-w-md w-full">
@@ -377,6 +412,11 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
             <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
             <span className="text-[10px] text-white font-medium">LIVE</span>
           </div>
+          {faceViolations.length > 0 && (
+            <div className="absolute bottom-2 left-2 right-2 bg-destructive/90 backdrop-blur-sm px-2 py-1 rounded text-[10px] text-white font-medium text-center">
+              {faceViolations[faceViolations.length - 1]?.type.replace('_', ' ')}
+            </div>
+          )}
         </div>
       </div>
 
