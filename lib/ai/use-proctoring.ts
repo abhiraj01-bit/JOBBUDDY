@@ -27,7 +27,7 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
   useEffect(() => {
     if (!isActive) return
     const initAI = async () => {
-      const key = geminiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyD6wRuqb539fRttpPI898or8v0IGkf9koQ'
+      const key = geminiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyB4nZ8530P1aMgXAH8h1iKPhW6eDczUZbA'
       await geminiProctoring.initialize(key)
       setAiLoaded(true)
       console.log('✅ Gemini AI Proctoring initialized')

@@ -32,7 +32,7 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
   // Initialize Gemini AI
   useEffect(() => {
     const initAI = async () => {
-      const key = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyCmqG8I6dfDvmNz5cujdZK4hMyZlVGKiuA'
+      const key = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyB4nZ8530P1aMgXAH8h1iKPhW6eDczUZbA'
       setGeminiKey(key)
       setLoading(true)
       try {

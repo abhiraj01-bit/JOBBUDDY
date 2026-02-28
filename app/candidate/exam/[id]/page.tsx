@@ -56,7 +56,7 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [attemptId, setAttemptId] = useState<string | null>(null)
   const [creatingAttempt, setCreatingAttempt] = useState(false)
-  const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyCmqG8I6dfDvmNz5cujdZK4hMyZlVGKiuA'
+  const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyB4nZ8530P1aMgXAH8h1iKPhW6eDczUZbA'
 
   useEffect(() => {
     const fetchExam = async () => {
