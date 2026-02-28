@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
+import { useAppStore } from "@/lib/store"
 import { mockExams, mockExamQuestions } from "@/lib/mock-data"
 import { useExamStore } from "@/lib/store/exam-store"
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,7 @@ import {
 export default function ExamAttemptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { state } = useAppStore()
   const { startExam, endExam } = useExamStore()
   const [exam, setExam] = useState<any>(null)
   const [questions, setQuestions] = useState<any[]>([])
@@ -48,7 +50,9 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
   const [examStartTime, setExamStartTime] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyD6wRuqb539fRttpPI898or8v0IGkf9koQ'
+  const [attemptId, setAttemptId] = useState<string | null>(null)
+  const [creatingAttempt, setCreatingAttempt] = useState(false)
+  const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyCmqG8I6dfDvmNz5cujdZK4hMyZlVGKiuA'
 
   useEffect(() => {
     const fetchExam = async () => {
@@ -70,18 +74,37 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
 
   // Define handleSubmit before using it
   const handleSubmit = async () => {
+    if (!attemptId) {
+      alert('Exam attempt not found. Please try again.')
+      return
+    }
+
     stopMonitoring()
     endExam()
 
     const duration = (Date.now() - examStartTime) / 1000
-    const response = await fetch(`/api/exam/${id}/report`, {
+    
+    // Submit exam without calculating final score
+    const response = await fetch(`/api/exam/${id}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ violations, duration })
+      body: JSON.stringify({ 
+        attemptId,
+        answers, 
+        violations, 
+        duration,
+        candidateId: state.user?.id
+      })
     })
 
-    const report = await response.json()
-    router.push(`/candidate/exams?submitted=true&score=${report.riskScore}`)
+    const result = await response.json()
+    
+    if (result.success) {
+      // Redirect to exams page with submission message
+      router.push(`/candidate/exams?submitted=true`)
+    } else {
+      alert('Submission failed. Please try again.')
+    }
   }
 
   // AI Proctoring with auto-submit
@@ -97,7 +120,37 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
 
   // Start exam lock and AI monitoring
   useEffect(() => {
-    if (hasStarted) {
+    if (hasStarted && !attemptId && !creatingAttempt) {
+      // Create exam attempt
+      const createAttempt = async () => {
+        setCreatingAttempt(true)
+        try {
+          console.log('Creating attempt for exam:', id, 'candidate:', state.user?.id)
+          const res = await fetch(`/api/exam/${id}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ candidateId: state.user?.id })
+          })
+          const data = await res.json()
+          console.log('Attempt creation response:', data)
+          if (data.attemptId) {
+            setAttemptId(data.attemptId)
+            console.log('Attempt created:', data.attemptId)
+          } else {
+            console.error('No attemptId in response:', data)
+            alert('Failed to create exam attempt. Please refresh and try again.')
+          }
+        } catch (error) {
+          console.error('Failed to create attempt:', error)
+          alert('Network error. Please check your connection and try again.')
+        } finally {
+          setCreatingAttempt(false)
+        }
+      }
+      createAttempt()
+    }
+
+    if (hasStarted && attemptId) {
       startExam(id)
       setExamStartTime(Date.now())
       if (aiLoaded && !isMonitoring) {
@@ -110,7 +163,7 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
         endExam()
       }
     }
-  }, [hasStarted, aiLoaded, id, startExam, endExam])
+  }, [hasStarted, attemptId, creatingAttempt, aiLoaded, id, startExam, endExam, state.user?.id])
 
   // Enter fullscreen and lock exam
   useEffect(() => {
@@ -260,6 +313,19 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
           >
             Enter Fullscreen & Begin
           </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading while creating attempt
+  if (hasStarted && !attemptId) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center p-8 border border-border rounded-xl bg-card max-w-md w-full">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+          <h2 className="text-lg font-semibold text-foreground mb-2">Initializing Exam...</h2>
+          <p className="text-sm text-muted-foreground">Please wait while we set up your exam session.</p>
         </div>
       </div>
     )

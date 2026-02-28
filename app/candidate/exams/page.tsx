@@ -2,16 +2,20 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAppStore } from "@/lib/store"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatusBadge, getExamStatusVariant } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
-import { BookOpen, Clock, FileText, Play, RotateCcw } from "lucide-react"
+import { BookOpen, Clock, FileText, Play, CheckCircle2 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function ExamsPage() {
   const { state } = useAppStore()
+  const searchParams = useSearchParams()
   const [exams, setExams] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const submitted = searchParams.get('submitted')
 
   useEffect(() => {
     fetchExams()
@@ -55,6 +59,15 @@ export default function ExamsPage() {
           { label: "Exams" },
         ]}
       />
+
+      {submitted && (
+        <Alert className="mb-6 border-success bg-success/10">
+          <CheckCircle2 className="h-4 w-4 text-success" />
+          <AlertDescription className="text-success">
+            Your exam has been submitted successfully. Results will be available after evaluation by your institution.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {exams.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">No exams available</div>

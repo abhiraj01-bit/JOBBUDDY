@@ -26,6 +26,18 @@ export default function CandidateDashboard() {
       const examsRes = await fetch(`/api/exams?status=published&institutionId=${state.user?.institutionId}`)
       const examsData = await examsRes.json()
       setExams(examsData.exams || [])
+
+      // Fetch exam attempts via API
+      console.log('Fetching attempts for candidate:', state.user?.id)
+      const attemptsRes = await fetch(`/api/candidate/attempts?candidateId=${state.user?.id}`)
+      const attemptsData = await attemptsRes.json()
+      
+      if (attemptsData.error) {
+        console.error('Error fetching attempts:', attemptsData.error)
+      } else {
+        console.log('Fetched attempts:', attemptsData.attempts)
+        setAttempts(attemptsData.attempts || [])
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error)
     }
@@ -33,7 +45,12 @@ export default function CandidateDashboard() {
   }
 
   const upcomingExams = exams.slice(0, 5)
-  const avgScore = 0 // Will be calculated from attempts
+  
+  // Calculate average score from published results
+  const publishedAttempts = attempts.filter(a => a.result_published && a.score !== null)
+  const avgScore = publishedAttempts.length > 0
+    ? Math.round(publishedAttempts.reduce((sum, a) => sum + (a.score / (a.max_score || 100)) * 100, 0) / publishedAttempts.length)
+    : 0
 
   if (loading) {
     return (

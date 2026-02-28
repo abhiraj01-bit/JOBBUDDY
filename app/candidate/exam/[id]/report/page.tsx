@@ -17,8 +17,12 @@ import { StatusBadge } from "@/components/shared/status-badge"
 
 interface ReportData {
   examId: string
+  examTitle?: string
   timestamp: string
   duration: number
+  score?: number
+  maxScore?: number
+  teacherRemarks?: string
   riskScore: number
   riskLevel: string
   recommendation: string
@@ -34,41 +38,50 @@ export default function ExamReportPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params)
   const [report, setReport] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    // Simulate fetching report
-    const mockReport: ReportData = {
-      examId: id,
-      timestamp: new Date().toISOString(),
-      duration: 3600,
-      riskScore: 15,
-      riskLevel: "LOW",
-      recommendation: "PASS",
-      totalViolations: 8,
-      genuineViolations: 3,
-      violationSummary: {
-        "LOOKING_AWAY": 2,
-        "TAB_SWITCH": 1
-      },
-      analysis: "Minor violations detected. Likely honest mistakes or environmental factors.",
-      insights: [
-        "Brief looking away detected - within acceptable range",
-        "One tab switch - possibly accidental"
-      ],
-      violations: []
-    }
-
-    setTimeout(() => {
-      setReport(mockReport)
-      setLoading(false)
-    }, 1000)
+    fetchResult()
   }, [id])
+
+  const fetchResult = async () => {
+    try {
+      const res = await fetch(`/api/candidate/results/${id}`)
+      const data = await res.json()
+      
+      console.log('Frontend - Received result data:', data)
+      
+      if (data.error) {
+        setError(data.error)
+      } else if (data.report) {
+        console.log('Frontend - Report score:', data.report.score)
+        setReport(data.report)
+      }
+    } catch (err) {
+      console.error('Frontend - Fetch error:', err)
+      setError('Failed to load result')
+    }
+    setLoading(false)
+  }
 
   if (loading) {
     return (
       <>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </>
+    )
+  }
+
+  if (error) {
+    return (
+      <>
+        <div className="max-w-2xl mx-auto text-center py-20">
+          <AlertTriangle className="h-16 w-16 mx-auto mb-4 text-warning" />
+          <h2 className="text-xl font-bold text-foreground mb-2">Result Not Available</h2>
+          <p className="text-muted-foreground mb-6">{error}</p>
+          <Button onClick={() => window.location.href = '/candidate/exams'}>Back to Exams</Button>
         </div>
       </>
     )
@@ -109,16 +122,42 @@ export default function ExamReportPage({ params }: { params: Promise<{ id: strin
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Exam Proctoring Report</h1>
+            <h1 className="text-2xl font-bold text-foreground">Exam Result</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              AI-powered integrity analysis
+              {report.examTitle || 'Exam'}
             </p>
           </div>
-          <Button variant="outline" size="sm" className="gap-2">
-            <Download className="h-4 w-4" />
-            Export PDF
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => window.location.href = '/candidate/exams'}>
+              Back to Exams
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Download className="h-4 w-4" />
+              Export PDF
+            </Button>
+          </div>
         </div>
+
+        {/* Score Card */}
+        {(report.score !== undefined && report.score !== null) && (
+          <div className="mb-6 rounded-xl border border-border bg-card p-6">
+            <div className="text-center">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">Your Score</h2>
+              <div className="text-5xl font-bold text-foreground mb-2">
+                {report.score}<span className="text-2xl text-muted-foreground">/{report.maxScore}</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {Math.round((report.score / (report.maxScore || 100)) * 100)}% Overall
+              </p>
+            </div>
+            {report.teacherRemarks && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <h3 className="text-xs font-semibold text-foreground mb-2">Teacher's Remarks</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{report.teacherRemarks}</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Risk Score Card */}
         <div className="mb-6 rounded-xl border border-border bg-card p-6">

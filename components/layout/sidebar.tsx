@@ -18,6 +18,8 @@ import {
   PanelLeftClose,
   PanelLeft,
   Sliders,
+  FileCheck,
+  ClipboardCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -31,6 +33,7 @@ interface NavItem {
 const candidateNav: NavItem[] = [
   { label: "Dashboard", href: "/candidate/dashboard", icon: LayoutDashboard },
   { label: "Exams", href: "/candidate/exams", icon: BookOpen },
+  { label: "Results", href: "/candidate/results", icon: ClipboardCheck },
   { label: "Reports", href: "/candidate/reports", icon: BarChart3 },
   { label: "Profile", href: "/candidate/profile", icon: UserCircle },
 ]
@@ -38,6 +41,7 @@ const candidateNav: NavItem[] = [
 const institutionNav: NavItem[] = [
   { label: "Dashboard", href: "/institution/dashboard", icon: LayoutDashboard },
   { label: "Exams", href: "/institution/exams", icon: BookOpen },
+  { label: "Submissions", href: "/institution/submissions", icon: FileCheck },
   { label: "Candidates", href: "/institution/candidates", icon: Users },
   { label: "Reports", href: "/institution/reports", icon: BarChart3 },
 ]

@@ -1,264 +1,315 @@
-# PHASE 1 TESTING CHECKLIST
+# ✅ COMPLETE TESTING CHECKLIST
 
-## ✅ Build Status
-- [x] Project builds successfully
-- [x] No TypeScript errors
-- [x] All dependencies installed
+## Pre-Testing Setup
 
-## 🧪 Testing Instructions
+- [ ] **Restart dev server** (CRITICAL - changes won't work without restart)
+  ```bash
+  # Press Ctrl+C to stop
+  npm run dev
+  ```
 
-### 1. Start Development Server
-```bash
-pnpm dev
-```
-Open: http://localhost:3000
+- [ ] **Verify .env.local** has all keys
+  ```
+  NEXT_PUBLIC_GEMINI_API_KEY=AIzaSyCmqG8I6dfDvmNz5cujdZK4hMyZlVGKiuA
+  NEXT_PUBLIC_SUPABASE_URL=https://tsteschcyoiydnljaftu.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=[your-key]
+  SUPABASE_SERVICE_ROLE_KEY=[your-key]
+  ```
 
----
+- [ ] **Database migration applied** (run in Supabase SQL Editor)
+  ```sql
+  SELECT column_name FROM information_schema.columns 
+  WHERE table_name = 'exam_attempts' 
+  AND column_name IN ('evaluated', 'result_published');
+  -- Should return 2 rows
+  ```
 
-### 2. Login
-- Go to: http://localhost:3000/login
-- Click "Candidate" quick login
-- Should redirect to: /candidate/dashboard
-
----
-
-### 3. Navigate to Exams
-- Click "Exams" in sidebar
-- Should see list of exams
-- Find "Web Development Fundamentals" (not-started status)
-
----
-
-### 4. Test Pre-Exam Verification
-
-#### Step 1: Start Verification
-- Click "Start Exam" button
-- Should navigate to: `/candidate/exam/e2/verification`
-- Should see 4-step progress indicator
-- Should see "Loading AI models..." message (2-3 seconds)
-
-#### Step 2: Camera Test
-- Click "Start Camera" button
-- Browser should ask for camera permission
-- **ALLOW camera access**
-- Video feed should appear
-- Button should change to "Camera Active"
-- Progress should move to Step 2
-
-#### Step 3: Face Verification
-- Click "Verify Face" button
-- AI should detect your face
-- If successful: Green "Face Verified" badge appears
-- If no face: Error message "No face detected"
-- If multiple faces: Error message "Multiple faces detected"
-- Progress should move to Step 3
-
-#### Step 4: Environment Scan
-- Click "Scan Environment" button
-- AI scans for unauthorized objects (phones, books)
-- If clear: Green "Environment Clear" badge appears
-- If objects detected: Error message with object names
-- Progress should move to Step 4
-
-#### Step 5: Start Exam
-- Click "Start Exam" button
-- Should navigate to: `/candidate/exam/e2`
-- Camera should stop
+- [ ] **Clear browser cache** (Ctrl+Shift+R or Cmd+Shift+R)
 
 ---
 
-### 5. Test AI-Powered Exam Monitoring
+## Test 1: Student Exam Flow (5 minutes)
 
-#### Check AI Status
-- Look at top-right corner
-- Should see 3 indicators:
-  - **AI** badge (green = monitoring active)
-  - **READY** badge (blue = AI models loaded)
-  - **Violation counter** (red, appears when violations detected)
+### 1.1 Start Exam
+- [ ] Login as student/candidate
+- [ ] Navigate to `/candidate/exams`
+- [ ] Click "Start Exam" on any published exam
+- [ ] Verify: Redirects to verification page
+- [ ] Click "Enter Fullscreen & Begin"
+- [ ] **Check browser console (F12)**:
+  ```
+  Expected: "Creating attempt for exam: [id] candidate: [id]"
+  Expected: "Attempt created: [uuid]"
+  ```
+- [ ] Verify: Exam interface loads with questions
+- [ ] Verify: Camera preview shows in bottom-right corner
+- [ ] Verify: Timer is counting down
 
-#### Test Face Detection
-- **Test 1**: Look away from screen for 3+ seconds
-  - Should detect "LOOKING_AWAY" violation
-  - Violation counter should increase
-  - Warning banner should appear
+### 1.2 Take Exam
+- [ ] Answer at least 2-3 questions
+- [ ] Try flagging a question
+- [ ] Navigate between questions using arrows
+- [ ] Verify: Answers are saved in state (question numbers turn green)
 
-- **Test 2**: Cover camera briefly
-  - Should detect "NO_FACE" violation
-  - Violation counter should increase
+### 1.3 Submit Exam
+- [ ] Click "Submit Exam" button
+- [ ] Confirm submission in dialog
+- [ ] **Check browser console**:
+  ```
+  Expected: No errors
+  Expected: Redirect to /candidate/exams?submitted=true
+  ```
+- [ ] Verify: Success alert shows "Results will be available after evaluation"
+- [ ] **Check server logs**:
+  ```
+  Expected: "Exam submitted successfully"
+  Expected: No error messages
+  ```
 
-#### Test Tab Switch Detection
-- **Test 3**: Press Alt+Tab to switch windows
-  - Should detect "TAB_SWITCH" violation
-  - Violation counter should increase
-  - Warning banner: "Tab switched during exam"
+### 1.4 Try to View Result (Before Publish)
+- [ ] Navigate to `/candidate/exam/[attempt-id]/report`
+- [ ] Verify: Shows "Result is under evaluation" message
+- [ ] Verify: Does NOT show score or teacher remarks
+- [ ] **Check browser console**:
+  ```
+  Expected: 403 error with message about evaluation
+  ```
 
-- **Test 4**: Click browser address bar
-  - Should detect "WINDOW_BLUR" violation
-  - Violation counter should increase
-
-#### Test Copy/Paste Prevention
-- **Test 5**: Try to copy text (Ctrl+C)
-  - Should be blocked
-  - Should detect "COPY_PASTE" violation
-  - Violation counter should increase
-
-#### Test Right-Click Prevention
-- **Test 6**: Right-click anywhere
-  - Should be blocked
-  - Should detect "RIGHT_CLICK" violation
-  - Violation counter should increase
-
----
-
-### 6. Complete Exam
-- Answer a few questions
-- Click "Submit Exam" button
-- Confirm submission
-- Should navigate back to exams list
-
----
-
-### 7. View AI Report
-- Go to: http://localhost:3000/candidate/exam/e2/report
-- Should see:
-  - **Risk Score** (0-100)
-  - **Risk Level** (LOW/MEDIUM/HIGH/CRITICAL)
-  - **Recommendation** (PASS/REVIEW/FAIL)
-  - **AI Analysis** text
-  - **Key Insights** list
-  - **Violation Summary** with counts
-  - **Exam Details**
+**Test 1 Status**: ⬜ Pass / ⬜ Fail
 
 ---
 
-## 🐛 Known Issues to Check
+## Test 2: Teacher Evaluation Flow (3 minutes)
 
-### Issue 1: AI Models Not Loading
-**Symptom**: "Loading AI models..." never completes
-**Check**: 
-- Open browser console (F12)
-- Look for errors
-- Check internet connection (models download from CDN)
+### 2.1 View Submissions Queue
+- [ ] Login as teacher/institution user
+- [ ] Navigate to `/institution/submissions`
+- [ ] Verify: Submitted exam appears in list
+- [ ] Verify: Shows candidate name
+- [ ] Verify: Shows exam title
+- [ ] Verify: Shows submission timestamp
+- [ ] Verify: Status badge shows "Pending" or "Submitted"
 
-### Issue 2: Camera Permission Denied
-**Symptom**: "Camera access denied" error
-**Fix**: 
-- Click lock icon in address bar
-- Allow camera permission
-- Refresh page
+### 2.2 Review Submission
+- [ ] Click "Review" button on the submission
+- [ ] Verify: Redirects to `/institution/submissions/[id]`
+- [ ] Verify: Shows student answers
+- [ ] Verify: Shows proctoring violations (if any)
+- [ ] Verify: Shows AI risk score
+- [ ] Verify: Evaluation form is visible with score input and remarks textarea
 
-### Issue 3: Face Not Detected
-**Symptom**: "No face detected" error even when face visible
-**Check**:
-- Ensure good lighting
-- Face camera directly
-- Remove glasses/mask if wearing
-- Wait 2-3 seconds for AI to process
+### 2.3 Evaluate Submission
+- [ ] Enter score (e.g., 85)
+- [ ] Enter remarks (e.g., "Good work! Well done.")
+- [ ] Click "Save Evaluation"
+- [ ] **Check browser console**:
+  ```
+  Expected: "Evaluation saved successfully" alert
+  Expected: No errors
+  ```
+- [ ] Verify: "Evaluated on [date]" message appears
+- [ ] Verify: "Publish Result" button becomes visible
 
-### Issue 4: Violations Not Showing
-**Symptom**: Tab switches not detected
-**Check**:
-- AI must be loaded (READY badge should be blue)
-- Monitoring must be active (AI badge should be green)
-- Check browser console for errors
+### 2.4 Publish Result
+- [ ] Click "Publish Result" button
+- [ ] Confirm in dialog
+- [ ] **Check browser console**:
+  ```
+  Expected: "Result published successfully" alert
+  Expected: Redirect to /institution/submissions
+  ```
+- [ ] Verify: Submission now shows "Published" badge
 
-### Issue 5: High CPU Usage
-**Symptom**: Browser becomes slow
-**Expected**: 
-- AI uses 15-25% CPU
-- ~200MB RAM
-- This is normal for real-time AI processing
-
----
-
-## 📊 Expected Results
-
-### Pre-Exam Verification
-- ✅ Camera starts successfully
-- ✅ Face detected in 1-2 seconds
-- ✅ Environment scan completes
-- ✅ Smooth transition to exam
-
-### Live Monitoring
-- ✅ AI indicators show active status
-- ✅ Face detection runs every 2 seconds
-- ✅ Object detection runs every 10 seconds
-- ✅ Tab switches detected immediately
-- ✅ Violations counted accurately
-
-### Post-Exam Report
-- ✅ Risk score calculated correctly
-- ✅ False positives filtered out
-- ✅ Insights generated
-- ✅ Report displays properly
+**Test 2 Status**: ⬜ Pass / ⬜ Fail
 
 ---
 
-## 🔧 Troubleshooting
+## Test 3: Student Result View (2 minutes)
 
-### Clear Browser Cache
-```
-Ctrl + Shift + Delete
-Clear cached images and files
-```
+### 3.1 View Published Result
+- [ ] Login as student again (same one who took exam)
+- [ ] Navigate to `/candidate/exam/[attempt-id]/report`
+- [ ] **Check browser console**:
+  ```
+  Expected: No errors
+  Expected: Report data loaded
+  ```
+- [ ] Verify: Score is displayed (e.g., "85/100")
+- [ ] Verify: Teacher remarks are shown
+- [ ] Verify: Integrity score is displayed
+- [ ] Verify: AI analysis section is visible
+- [ ] Verify: Violation summary is shown
+- [ ] Verify: Exam details section is complete
 
-### Restart Dev Server
-```bash
-# Stop server (Ctrl+C)
-pnpm dev
+### 3.2 Verify Data Accuracy
+- [ ] Confirm score matches what teacher entered
+- [ ] Confirm remarks match what teacher entered
+- [ ] Confirm exam duration is correct
+- [ ] Confirm violation count is accurate
+
+**Test 3 Status**: ⬜ Pass / ⬜ Fail
+
+---
+
+## Test 4: Edge Cases (5 minutes)
+
+### 4.1 Score of Zero
+- [ ] Create new exam submission
+- [ ] Teacher evaluates with score = 0
+- [ ] Verify: Score saves correctly (not rejected as falsy)
+- [ ] Verify: Can publish result
+- [ ] Verify: Student sees score of 0
+
+### 4.2 Empty Remarks
+- [ ] Create new exam submission
+- [ ] Teacher evaluates with score but no remarks
+- [ ] Verify: Evaluation saves successfully
+- [ ] Verify: Can publish result
+- [ ] Verify: Student sees score without remarks section
+
+### 4.3 Multiple Submissions
+- [ ] Have 2-3 students submit exams
+- [ ] Verify: All appear in teacher's queue
+- [ ] Verify: Teacher can evaluate each independently
+- [ ] Verify: Publishing one doesn't affect others
+
+### 4.4 Unpublished Result Access
+- [ ] Create submission and evaluate (don't publish)
+- [ ] Try to access result as student
+- [ ] Verify: Still shows "under evaluation" message
+- [ ] Verify: Does NOT show score or remarks
+
+**Test 4 Status**: ⬜ Pass / ⬜ Fail
+
+---
+
+## Test 5: Database Verification (2 minutes)
+
+### 5.1 Check Exam Attempt Record
+Run in Supabase SQL Editor:
+```sql
+SELECT 
+  id,
+  exam_id,
+  candidate_id,
+  status,
+  score,
+  evaluated,
+  result_published,
+  evaluated_at,
+  published_at,
+  teacher_remarks
+FROM exam_attempts
+WHERE id = '[your-attempt-id]';
 ```
 
-### Check Console Logs
-```
-F12 → Console tab
-Look for:
-- "✅ AI Proctoring initialized"
-- "✅ Face detection AI loaded"
-- "✅ Object detection AI loaded"
+- [ ] Verify: `status = 'submitted'`
+- [ ] Verify: `score` matches teacher input
+- [ ] Verify: `evaluated = true`
+- [ ] Verify: `result_published = true`
+- [ ] Verify: `evaluated_at` has timestamp
+- [ ] Verify: `published_at` has timestamp
+- [ ] Verify: `teacher_remarks` matches teacher input
+
+### 5.2 Check Violations
+```sql
+SELECT COUNT(*) as violation_count
+FROM violations
+WHERE attempt_id = '[your-attempt-id]';
 ```
 
-### Test in Different Browser
-- Chrome (Recommended)
-- Edge (Recommended)
-- Firefox (May have issues)
-- Safari (Not tested)
+- [ ] Verify: Count matches what's shown in UI
+
+**Test 5 Status**: ⬜ Pass / ⬜ Fail
 
 ---
 
-## 📝 Test Results
+## Test 6: Error Handling (3 minutes)
 
-### Date: ___________
-### Tester: ___________
+### 6.1 Network Errors
+- [ ] Open DevTools → Network tab
+- [ ] Throttle to "Slow 3G"
+- [ ] Try submitting exam
+- [ ] Verify: Shows loading state
+- [ ] Verify: Eventually succeeds or shows error
+
+### 6.2 Invalid Data
+- [ ] Try to publish without evaluating
+- [ ] Verify: Shows error "must be evaluated before publishing"
+- [ ] Try to evaluate with empty score
+- [ ] Verify: Save button is disabled or shows validation error
+
+### 6.3 Unauthorized Access
+- [ ] Login as student
+- [ ] Try to access `/institution/submissions`
+- [ ] Verify: Redirects or shows access denied
+
+**Test 6 Status**: ⬜ Pass / ⬜ Fail
+
+---
+
+## Overall Test Results
 
 | Test | Status | Notes |
 |------|--------|-------|
-| Build Success | ⬜ Pass ⬜ Fail | |
-| Login Works | ⬜ Pass ⬜ Fail | |
-| AI Models Load | ⬜ Pass ⬜ Fail | |
-| Camera Access | ⬜ Pass ⬜ Fail | |
-| Face Detection | ⬜ Pass ⬜ Fail | |
-| Environment Scan | ⬜ Pass ⬜ Fail | |
-| Tab Switch Detection | ⬜ Pass ⬜ Fail | |
-| Copy/Paste Block | ⬜ Pass ⬜ Fail | |
-| Right-Click Block | ⬜ Pass ⬜ Fail | |
-| Violation Counter | ⬜ Pass ⬜ Fail | |
-| Report Generation | ⬜ Pass ⬜ Fail | |
+| Test 1: Student Exam Flow | ⬜ Pass / ⬜ Fail | |
+| Test 2: Teacher Evaluation | ⬜ Pass / ⬜ Fail | |
+| Test 3: Student Result View | ⬜ Pass / ⬜ Fail | |
+| Test 4: Edge Cases | ⬜ Pass / ⬜ Fail | |
+| Test 5: Database Verification | ⬜ Pass / ⬜ Fail | |
+| Test 6: Error Handling | ⬜ Pass / ⬜ Fail | |
 
 ---
 
-## ✅ Sign-Off
+## If Any Test Fails
 
-Phase 1 is ready for testing when:
-- [x] Build completes without errors
-- [x] All files created
-- [x] Dependencies installed
-- [x] Routes configured correctly
+1. **Check browser console** for JavaScript errors
+2. **Check server logs** for API errors
+3. **Check database** for data inconsistencies
+4. **Refer to**: `TROUBLESHOOTING_QUICK.md`
+5. **Verify**: Dev server was restarted after code changes
 
-**Status**: ✅ READY FOR TESTING
+---
 
-**Next Steps**: 
-1. Run `pnpm dev`
-2. Follow testing instructions above
-3. Report any issues found
-4. If all tests pass → Commit to git
-5. If issues found → Fix and retest
+## Success Criteria
+
+✅ All 6 tests pass
+✅ No errors in browser console
+✅ No errors in server logs
+✅ Database records are correct
+✅ UI shows correct data at each step
+
+---
+
+## Performance Benchmarks
+
+- [ ] Exam start: < 2 seconds
+- [ ] Exam submit: < 3 seconds
+- [ ] Evaluation save: < 1 second
+- [ ] Result publish: < 1 second
+- [ ] Result load: < 2 seconds
+
+---
+
+## Final Verification
+
+- [ ] Complete workflow works end-to-end
+- [ ] No console errors throughout entire flow
+- [ ] All data persists correctly in database
+- [ ] UI updates reflect database state
+- [ ] Security checks work (unpublished results hidden)
+
+---
+
+**Testing Completed**: ⬜ Yes / ⬜ No
+
+**Date**: _______________
+
+**Tester**: _______________
+
+**Overall Status**: ⬜ All Pass ✅ / ⬜ Some Failures ❌
+
+**Notes**:
+_____________________________________________________________
+_____________________________________________________________
+_____________________________________________________________
