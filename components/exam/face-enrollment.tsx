@@ -61,7 +61,6 @@ export function FaceEnrollment({ examId, candidateId, onSuccess, onCancel }: Fac
       console.error('Camera error:', error)
       setStatus('error')
       setMessage('Failed to access camera. Please grant camera permission.')
-      onError('Camera access denied')
     }
   }
 
@@ -113,8 +112,11 @@ export function FaceEnrollment({ examId, candidateId, onSuccess, onCancel }: Fac
         })
       })
 
+      const responseData = await uploadResponse.json()
+
       if (!uploadResponse.ok) {
-        throw new Error('Failed to save face data')
+        console.error('API Error:', responseData)
+        throw new Error(responseData.error || 'Failed to save face data')
       }
 
       setStatus('success')
