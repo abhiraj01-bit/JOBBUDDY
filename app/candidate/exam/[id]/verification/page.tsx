@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
-import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Camera, CheckCircle2, XCircle, Loader2, Shield, AlertTriangle } from "lucide-react"
@@ -20,7 +19,7 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  
+
   const [currentStep, setCurrentStep] = useState(1)
   const [cameraActive, setCameraActive] = useState(false)
   const [faceDetected, setFaceDetected] = useState(false)
@@ -33,7 +32,7 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
   // Initialize Gemini AI
   useEffect(() => {
     const initAI = async () => {
-      const key = 'AIzaSyAqpZNVj1Fzd1D1DKL_ata6E7J_pHpT3DY'
+      const key = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyD6wRuqb539fRttpPI898or8v0IGkf9koQ'
       setGeminiKey(key)
       setLoading(true)
       try {
@@ -53,12 +52,12 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
     try {
       setLoading(true)
       setError("")
-      
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480 },
         audio: false
       })
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play()
@@ -75,39 +74,39 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
   // Step 2: Verify Face with Gemini AI
   const verifyFace = async () => {
     if (!videoRef.current || !aiReady || !canvasRef.current) return
-    
+
     setLoading(true)
     setError("")
-    
+
     try {
       // Capture frame
       const ctx = canvasRef.current.getContext('2d')
       if (!ctx) return
-      
+
       canvasRef.current.width = videoRef.current.videoWidth
       canvasRef.current.height = videoRef.current.videoHeight
       ctx.drawImage(videoRef.current, 0, 0)
-      
+
       const imageData = canvasRef.current.toDataURL('image/jpeg', 0.8)
-      
+
       // Gemini AI analysis
       const result = await geminiProctoring.verifyFace(imageData)
-      
+
       if (!result.success) {
         setError(result.message)
         return
       }
-      
+
       if (result.faceCount === 0) {
         setError("No face detected. Please position yourself in front of the camera.")
         return
       }
-      
+
       if (result.faceCount > 1) {
         setError(`${result.faceCount} faces detected. Please ensure you are alone.`)
         return
       }
-      
+
       setFaceDetected(true)
       setCurrentStep(3)
     } catch (err) {
@@ -120,34 +119,34 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
   // Step 3: Scan Environment with Gemini AI
   const scanEnvironment = async () => {
     if (!videoRef.current || !aiReady || !canvasRef.current) return
-    
+
     setLoading(true)
     setError("")
-    
+
     try {
       // Capture frame
       const ctx = canvasRef.current.getContext('2d')
       if (!ctx) return
-      
+
       canvasRef.current.width = videoRef.current.videoWidth
       canvasRef.current.height = videoRef.current.videoHeight
       ctx.drawImage(videoRef.current, 0, 0)
-      
+
       const imageData = canvasRef.current.toDataURL('image/jpeg', 0.8)
-      
+
       // Gemini AI analysis
       const result = await geminiProctoring.verifyEnvironment(imageData)
-      
+
       if (!result.success) {
         setError(`${result.message}: ${result.issues.join(", ")}`)
         return
       }
-      
+
       if (result.issues.length > 0) {
         setError(`Issues detected: ${result.issues.join(", ")}. Please resolve them.`)
         return
       }
-      
+
       setEnvironmentClear(true)
       setCurrentStep(4)
     } catch (err) {
@@ -164,7 +163,7 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
       const stream = videoRef.current.srcObject as MediaStream
       stream.getTracks().forEach(track => track.stop())
     }
-    
+
     // Navigate to exam
     router.push(`/candidate/exam/${id}`)
   }
@@ -203,7 +202,7 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="max-w-4xl mx-auto">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-foreground mb-2">Pre-Exam Verification</h1>
@@ -215,17 +214,15 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
           <div className="flex items-center justify-between mb-4">
             {STEPS.map((step, idx) => (
               <div key={step.id} className="flex items-center flex-1">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                  currentStep > step.id ? "bg-success border-success text-white" :
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${currentStep > step.id ? "bg-success border-success text-white" :
                   currentStep === step.id ? "bg-primary border-primary text-white" :
-                  "bg-secondary border-border text-muted-foreground"
-                }`}>
+                    "bg-secondary border-border text-muted-foreground"
+                  }`}>
                   {currentStep > step.id ? <CheckCircle2 className="h-5 w-5" /> : <step.icon className="h-5 w-5" />}
                 </div>
                 {idx < STEPS.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-2 ${
-                    currentStep > step.id ? "bg-success" : "bg-border"
-                  }`} />
+                  <div className={`flex-1 h-0.5 mx-2 ${currentStep > step.id ? "bg-success" : "bg-border"
+                    }`} />
                 )}
               </div>
             ))}
@@ -275,7 +272,7 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
             )}
-            
+
             {/* Status Indicators */}
             {cameraActive && (
               <div className="absolute top-4 right-4 flex gap-2">
@@ -316,6 +313,6 @@ export default function VerificationPage({ params }: { params: Promise<{ id: str
           </ul>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   )
 }

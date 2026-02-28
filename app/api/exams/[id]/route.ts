@@ -31,3 +31,33 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: examId } = await params
+
+    const { data: exam, error } = await supabaseAdmin
+      .from('exams')
+      .select('*, questions(*)')
+      .eq('id', examId)
+      .single()
+
+    if (error) {
+      console.error('Fetch exam error:', error)
+      return NextResponse.json({ error: 'Failed to fetch exam' }, { status: 404 })
+    }
+
+    // Sort questions by order_index if available
+    if (exam && exam.questions) {
+      exam.questions.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+    }
+
+    return NextResponse.json({ exam })
+  } catch (error) {
+    console.error('Get exam error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

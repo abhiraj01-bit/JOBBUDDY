@@ -25,34 +25,35 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
 
   // Initialize Gemini AI
   useEffect(() => {
+    if (!isActive) return
     const initAI = async () => {
-      const key = geminiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyANJUuPRmsTQaZgeixHaiamxCqd7b6VTGc'
+      const key = geminiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyD6wRuqb539fRttpPI898or8v0IGkf9koQ'
       await geminiProctoring.initialize(key)
       setAiLoaded(true)
       console.log('✅ Gemini AI Proctoring initialized')
-      
+
       voiceWarning.enable()
       voiceWarning.info('AI proctoring system activated. Please remain in front of the camera.')
     }
-    
+
     initAI()
-  }, [geminiKey])
+  }, [geminiKey, isActive])
 
   // Add violation with voice warning
   const addViolation = useCallback((violation: Violation) => {
     setViolations(prev => {
       const newViolations = [...prev, violation]
-      
+
       // Auto-terminate after 5 violations
       if (newViolations.length >= 5 && onAutoSubmit) {
         voiceWarning.critical('Too many violations detected. Your exam is being terminated and submitted automatically.')
         setTimeout(() => onAutoSubmit(), 2000)
         return newViolations
       }
-      
+
       return newViolations
     })
-    
+
     // Voice warnings - reduced cooldown to 1 second
     const now = Date.now()
     if (now - lastViolationTime.current > 1000) {
@@ -80,18 +81,18 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
     if (videoRef.current?.srcObject) {
       return true // Already started
     }
-    
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480, facingMode: 'user' },
         audio: false
       })
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play()
       }
-      
+
       return true
     } catch (error) {
       console.error('Camera access denied:', error)
@@ -106,15 +107,15 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
     try {
       const ctx = canvasRef.current.getContext('2d')
       if (!ctx) return
-      
+
       canvasRef.current.width = videoRef.current.videoWidth
       canvasRef.current.height = videoRef.current.videoHeight
       ctx.drawImage(videoRef.current, 0, 0)
-      
+
       const imageData = canvasRef.current.toDataURL('image/jpeg', 0.6)
-      
+
       const result = await geminiProctoring.analyzeFrame(imageData)
-      
+
       if (!result.isValid && result.violations.length > 0) {
         result.violations.forEach(v => {
           addViolation({
@@ -142,7 +143,7 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
     }
 
     setIsMonitoring(true)
-    
+
     // Start monitoring after camera is ready
     setTimeout(() => {
       monitoringInterval.current = setInterval(monitorFrame, 3000)
@@ -154,12 +155,12 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
     if (monitoringInterval.current) {
       clearInterval(monitoringInterval.current)
     }
-    
+
     if (videoRef.current?.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream
       stream.getTracks().forEach(track => track.stop())
     }
-    
+
     setIsMonitoring(false)
   }, [])
 
@@ -171,16 +172,16 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
       if (document.hidden) {
         setTabSwitchCount(prev => {
           const newCount = prev + 1
-          
+
           const violation: Violation = {
             type: 'TAB_SWITCH',
             severity: newCount >= 3 ? 'critical' : 'medium',
             description: `Tab switched during exam (${newCount} times)`,
             timestamp: new Date().toISOString()
           }
-          
+
           addViolation(violation)
-          
+
           if (newCount >= 3 && onAutoSubmit) {
             voiceWarning.critical('Too many tab switches. Exam will be submitted automatically in 5 seconds.')
             setTimeout(() => onAutoSubmit(), 5000)
@@ -189,7 +190,7 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
           } else {
             voiceWarning.warning('Do not switch tabs during the exam.')
           }
-          
+
           return newCount
         })
       }
@@ -238,7 +239,7 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
       })
       voiceWarning.warning('Copy and paste is not allowed during the exam.')
     }
-    
+
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
         addViolation({

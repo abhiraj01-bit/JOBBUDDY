@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useAppStore } from "@/lib/store"
 import { Navbar } from "./navbar"
 import { AppSidebar } from "./sidebar"
-import { Footer } from "./footer"
+import { LargeNameFooter } from "@/components/ui/large-name-footer"
 import { cn } from "@/lib/utils"
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -42,7 +42,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
             {children}
           </div>
-          <Footer />
+          <LargeNameFooter />
         </main>
       </div>
     </div>

@@ -35,30 +35,51 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params)
   const router = useRouter()
   const { startExam, endExam } = useExamStore()
-  const exam = mockExams.find((e) => e.id === id)
-  const questions = exam?.questions || mockExamQuestions.slice(0, 5)
+  const [exam, setExam] = useState<any>(null)
+  const [questions, setQuestions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [hasStarted, setHasStarted] = useState(false)
 
   const [currentQ, setCurrentQ] = useState(0)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [flagged, setFlagged] = useState<Set<number>>(new Set())
-  const [timeLeft, setTimeLeft] = useState((exam?.duration || 60) * 60)
+  const [timeLeft, setTimeLeft] = useState(0)
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
-  const [examStartTime] = useState(Date.now())
+  const [examStartTime, setExamStartTime] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const geminiKey = 'AIzaSyANJUuPRmsTQaZgeixHaiamxCqd7b6VTGc'
+  const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyD6wRuqb539fRttpPI898or8v0IGkf9koQ'
+
+  useEffect(() => {
+    const fetchExam = async () => {
+      try {
+        const res = await fetch(`/api/exams/${id}`)
+        const data = await res.json()
+        if (data.error) throw new Error(data.error)
+        setExam(data.exam)
+        setQuestions(data.exam.questions || [])
+        setTimeLeft((data.exam.duration || 60) * 60)
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchExam()
+  }, [id])
 
   // Define handleSubmit before using it
   const handleSubmit = async () => {
     stopMonitoring()
     endExam()
-    
+
     const duration = (Date.now() - examStartTime) / 1000
     const response = await fetch(`/api/exam/${id}/report`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ violations, duration })
     })
-    
+
     const report = await response.json()
     router.push(`/candidate/exams?submitted=true&score=${report.riskScore}`)
   }
@@ -72,22 +93,29 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
     tabSwitchCount,
     startMonitoring,
     stopMonitoring
-  } = useProctoringMonitor(id, true, handleSubmit, geminiKey)
+  } = useProctoringMonitor(id, hasStarted, handleSubmit, geminiKey)
 
   // Start exam lock and AI monitoring
   useEffect(() => {
-    startExam(id)
-    if (aiLoaded && !isMonitoring) {
-      startMonitoring()
+    if (hasStarted) {
+      startExam(id)
+      setExamStartTime(Date.now())
+      if (aiLoaded && !isMonitoring) {
+        startMonitoring()
+      }
     }
     return () => {
-      stopMonitoring()
-      endExam()
+      if (hasStarted) {
+        stopMonitoring()
+        endExam()
+      }
     }
-  }, [aiLoaded, id, startExam, endExam])
+  }, [hasStarted, aiLoaded, id, startExam, endExam])
 
   // Enter fullscreen and lock exam
   useEffect(() => {
+    if (!hasStarted) return
+
     const enterFullscreen = async () => {
       try {
         await document.documentElement.requestFullscreen()
@@ -96,29 +124,28 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
         console.error('Fullscreen error:', err)
       }
     }
-    
+
     enterFullscreen()
-    
+
     // Detect fullscreen exit
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
         setIsFullscreen(false)
         alert('You must stay in fullscreen mode during the exam!')
-        enterFullscreen()
       }
     }
-    
+
     document.addEventListener('fullscreenchange', handleFullscreenChange)
-    
+
     // Prevent navigation
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault()
       e.returnValue = 'Are you sure you want to leave? Your exam will be submitted.'
       return e.returnValue
     }
-    
+
     window.addEventListener('beforeunload', handleBeforeUnload)
-    
+
     // Disable back button
     window.history.pushState(null, '', window.location.href)
     const handlePopState = () => {
@@ -126,16 +153,16 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
       alert('Navigation is disabled during the exam!')
     }
     window.addEventListener('popstate', handlePopState)
-    
+
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('popstate', handlePopState)
       if (document.fullscreenElement) {
-        document.exitFullscreen()
+        document.exitFullscreen().catch(err => console.error(err))
       }
     }
-  }, [])
+  }, [hasStarted])
 
   // Prevent F11, F12, Ctrl+Shift+I, etc.
   useEffect(() => {
@@ -161,12 +188,13 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
         e.preventDefault()
       }
     }
-    
+
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   useEffect(() => {
+    if (!hasStarted) return
     const timer = setInterval(() => {
       setTimeLeft((p) => {
         if (p <= 0) {
@@ -177,7 +205,7 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [hasStarted])
 
   const formatTime = (s: number) => {
     const h = Math.floor(s / 3600)
@@ -203,10 +231,36 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
     })
   }
 
-  if (!exam) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <p className="text-muted-foreground">Exam not found.</p>
+        <p className="text-muted-foreground">Loading exam...</p>
+      </div>
+    )
+  }
+
+  if (error || !exam) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-destructive">{error || "Exam not found."}</p>
+      </div>
+    )
+  }
+
+  if (!hasStarted) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center p-8 border border-border rounded-xl bg-card max-w-md w-full">
+          <h1 className="text-2xl font-bold mb-2 text-foreground">{exam.title}</h1>
+          <p className="mb-6 text-muted-foreground text-sm">You must be in fullscreen mode to take this exam. Make sure your camera and microphone are ready.</p>
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={() => setHasStarted(true)}
+          >
+            Enter Fullscreen & Begin
+          </Button>
+        </div>
       </div>
     )
   }
@@ -224,9 +278,8 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
       {/* Fixed Timer Header */}
-      <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
-        isLowTime ? "border-destructive/30 bg-destructive/5" : "border-border bg-card"
-      }`}>
+      <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${isLowTime ? "border-destructive/30 bg-destructive/5" : "border-border bg-card"
+        }`}>
         <div className="flex items-center gap-3">
           <h1 className="text-sm font-semibold text-foreground">{exam.title}</h1>
           <StatusBadge label={`${answeredCount}/${questions.length} answered`} variant="info" />
@@ -247,11 +300,11 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
       {/* Camera preview - bottom right corner */}
       <div className="fixed bottom-4 right-4 z-50">
         <div className="relative rounded-lg overflow-hidden border-2 border-primary shadow-lg bg-black">
-          <video 
-            ref={videoRef} 
-            className="w-48 h-36 object-cover" 
-            playsInline 
-            muted 
+          <video
+            ref={videoRef}
+            className="w-48 h-36 object-cover"
+            playsInline
+            muted
             autoPlay
           />
           <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full">
@@ -271,13 +324,12 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
                 <button
                   key={i}
                   onClick={() => setCurrentQ(i)}
-                  className={`relative flex h-9 w-9 items-center justify-center rounded-lg text-xs font-medium transition-colors ${
-                    i === currentQ
-                      ? "bg-primary text-primary-foreground"
-                      : answers[i] !== undefined
-                        ? "bg-success/10 text-success border border-success/20"
-                        : "bg-secondary text-muted-foreground hover:bg-accent/10"
-                  }`}
+                  className={`relative flex h-9 w-9 items-center justify-center rounded-lg text-xs font-medium transition-colors ${i === currentQ
+                    ? "bg-primary text-primary-foreground"
+                    : answers[i] !== undefined
+                      ? "bg-success/10 text-success border border-success/20"
+                      : "bg-secondary text-muted-foreground hover:bg-accent/10"
+                    }`}
                 >
                   {i + 1}
                   {flagged.has(i) && (
@@ -338,10 +390,9 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
                 onValueChange={(v) => setAnswers({ ...answers, [currentQ]: v })}
                 className="space-y-3"
               >
-                {q.options.map((opt, i) => (
-                  <div key={i} className={`flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer ${
-                    answers[currentQ] === String(i) ? "border-primary bg-primary/5" : "border-border hover:bg-secondary/50"
-                  }`}>
+                {q.options.map((opt: string, i: number) => (
+                  <div key={i} className={`flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer ${answers[currentQ] === String(i) ? "border-primary bg-primary/5" : "border-border hover:bg-secondary/50"
+                    }`}>
                     <RadioGroupItem value={String(i)} id={`opt-${i}`} />
                     <Label htmlFor={`opt-${i}`} className="text-sm text-foreground cursor-pointer flex-1">{opt}</Label>
                   </div>

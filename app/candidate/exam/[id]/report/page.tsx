@@ -1,14 +1,13 @@
 "use client"
 
 import { use, useEffect, useState } from "react"
-import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { 
-  CheckCircle2, 
-  XCircle, 
-  AlertTriangle, 
-  Download, 
+import {
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Download,
   Clock,
   Shield,
   Eye,
@@ -58,7 +57,7 @@ export default function ExamReportPage({ params }: { params: Promise<{ id: strin
       ],
       violations: []
     }
-    
+
     setTimeout(() => {
       setReport(mockReport)
       setLoading(false)
@@ -67,21 +66,21 @@ export default function ExamReportPage({ params }: { params: Promise<{ id: strin
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </DashboardLayout>
+      </>
     )
   }
 
   if (!report) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex items-center justify-center py-20">
           <p className="text-muted-foreground">Report not found</p>
         </div>
-      </DashboardLayout>
+      </>
     )
   }
 
@@ -105,7 +104,7 @@ export default function ExamReportPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
@@ -232,11 +231,11 @@ export default function ExamReportPage({ params }: { params: Promise<{ id: strin
         {/* Footer Note */}
         <div className="mt-6 p-4 rounded-lg bg-secondary/50 border border-border">
           <p className="text-xs text-muted-foreground text-center">
-            This report was generated using AI-powered proctoring technology. 
+            This report was generated using AI-powered proctoring technology.
             All violations are analyzed for context and false positives are filtered out.
           </p>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   )
 }
