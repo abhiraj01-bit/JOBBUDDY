@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, use } from "react"
+import { useState, useEffect, use, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/lib/store"
 import { mockExams, mockExamQuestions } from "@/lib/mock-data"
@@ -55,6 +55,14 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   const [examStartTime, setExamStartTime] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [attemptId, setAttemptId] = useState<string | null>(null)
+  const attemptIdRef = useRef<string | null>(null)
+  const violationsRef = useRef<any[]>([])
+  const faceViolationsRef = useRef<any[]>([])
+  
+  // Sync ref with state to bypass stale closures in background AI loops
+  useEffect(() => {
+    attemptIdRef.current = attemptId
+  }, [attemptId])
   const [creatingAttempt, setCreatingAttempt] = useState(false)
   const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyB4nZ8530P1aMgXAH8h1iKPhW6eDczUZbA'
 
@@ -78,24 +86,30 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
 
   // Define handleSubmit before using it
   const handleSubmit = async () => {
-    if (!attemptId) {
+    const currentAttemptId = attemptIdRef.current
+    if (!currentAttemptId) {
       alert('Exam attempt not found. Please try again.')
       return
     }
 
+    const targetAttemptId = currentAttemptId
     stopMonitoring()
     endExam()
 
     const duration = (Date.now() - examStartTime) / 1000
+    
+    // Use REFS for violations to ensure we have the absolute latest data even in auto-submit scenarios
+    const allViolations = [...violationsRef.current, ...faceViolationsRef.current]
+    console.log('[Submit] Final Payload Violations:', allViolations)
     
     // Submit exam without calculating final score
     const response = await fetch(`/api/exam/${id}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        attemptId,
+        attemptId: targetAttemptId,
         answers, 
-        violations, 
+        violations: allViolations, 
         duration,
         candidateId: state.user?.id
       })
@@ -128,7 +142,15 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
     isVerifying,
     startVerification,
     stopVerification
-  } = useFaceVerification(attemptId || '', handleSubmit)
+  } = useFaceVerification(attemptId || '', handleSubmit, videoRef as React.RefObject<HTMLVideoElement | null>)
+
+  useEffect(() => {
+    violationsRef.current = violations
+  }, [violations])
+
+  useEffect(() => {
+    faceViolationsRef.current = faceViolations
+  }, [faceViolations])
 
   // Start exam lock and AI monitoring
   useEffect(() => {
@@ -184,17 +206,6 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
   // Enter fullscreen and lock exam
   useEffect(() => {
     if (!hasStarted) return
-
-    const enterFullscreen = async () => {
-      try {
-        await document.documentElement.requestFullscreen()
-        setIsFullscreen(true)
-      } catch (err) {
-        console.error('Fullscreen error:', err)
-      }
-    }
-
-    enterFullscreen()
 
     // Detect fullscreen exit
     const handleFullscreenChange = () => {
@@ -318,32 +329,36 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
 
   if (!hasStarted) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center p-8 border border-border rounded-xl bg-card max-w-md w-full">
-          <h1 className="text-2xl font-bold mb-2 text-foreground">{exam.title}</h1>
-          <p className="mb-6 text-muted-foreground text-sm">You must be in fullscreen mode to take this exam. Make sure your camera and microphone are ready.</p>
-          <Button
-            size="lg"
-            className="w-full"
-            onClick={() => setShowFaceEnrollment(true)}
-          >
-            Enter Fullscreen & Begin
-          </Button>
-        </div>
-        {showFaceEnrollment && (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        {!showFaceEnrollment ? (
+          <div className="text-center p-8 border border-border rounded-xl bg-card max-w-md w-full shadow-lg">
+            <h1 className="text-2xl font-bold mb-2 text-foreground">{exam.title}</h1>
+            <p className="mb-6 text-muted-foreground text-sm">
+              You must be in fullscreen mode to take this exam. Make sure your camera and microphone are ready.
+            </p>
+            <Button
+              size="lg"
+              className="w-full"
+              onClick={async () => {
+                try {
+                  await document.documentElement.requestFullscreen()
+                  setIsFullscreen(true)
+                } catch (err) {
+                  console.error('Fullscreen error:', err)
+                }
+                setShowFaceEnrollment(true)
+              }}
+            >
+              Enter Fullscreen & Begin
+            </Button>
+          </div>
+        ) : (
           <FaceEnrollment
             examId={id}
             candidateId={state.user?.id || ''}
             onSuccess={async () => {
               setFaceEnrolled(true)
               setShowFaceEnrollment(false)
-              // Enter fullscreen automatically
-              try {
-                await document.documentElement.requestFullscreen()
-                setIsFullscreen(true)
-              } catch (err) {
-                console.error('Fullscreen error:', err)
-              }
               setHasStarted(true)
             }}
             onCancel={() => setShowFaceEnrollment(false)}
@@ -370,12 +385,27 @@ export default function ExamAttemptPage({ params }: { params: Promise<{ id: stri
     <div className="min-h-screen bg-background p-4">
       {/* Exam Lock Warning */}
       {!isFullscreen && (
-        <div className="fixed inset-0 bg-destructive/90 z-50 flex items-center justify-center">
-          <div className="text-center text-white">
+        <div className="fixed inset-0 bg-destructive/90 z-50 flex flex-col items-center justify-center">
+          <div className="text-center text-white mb-6">
             <AlertTriangle className="h-16 w-16 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Fullscreen Required</h2>
-            <p>You must remain in fullscreen mode during the exam</p>
+            <p className="mb-4">You must remain in fullscreen mode during the exam</p>
           </div>
+          <Button
+            size="lg"
+            variant="secondary"
+            className="text-black bg-white hover:bg-gray-200"
+            onClick={async () => {
+              try {
+                await document.documentElement.requestFullscreen()
+                setIsFullscreen(true)
+              } catch (err) {
+                console.error('Fullscreen error:', err)
+              }
+            }}
+          >
+            Return to Fullscreen
+          </Button>
         </div>
       )}
       {/* Fixed Timer Header */}

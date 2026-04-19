@@ -1,7 +1,7 @@
 // Face verification utility using face-api.js
 // This handles face detection, embedding generation, and comparison
 
-import * as faceapi from 'face-api.js'
+import * as faceapi from '@vladmandic/face-api'
 
 let modelsLoaded = false
 

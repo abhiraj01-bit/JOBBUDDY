@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { geminiProctoring } from '@/lib/ai/gemini-proctoring'
+import * as tf from '@tensorflow/tfjs'
 import { voiceWarning } from '@/lib/ai/voice-warning'
+import { objectDetectionAI } from '@/lib/ai/object-detection'
+import { faceDetectionAI } from '@/lib/ai/face-detection'
 
 interface Violation {
   type: string
@@ -14,30 +16,42 @@ interface Violation {
 
 export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSubmit?: () => void, geminiKey?: string) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const onAutoSubmitRef = useRef(onAutoSubmit)
+
+  useEffect(() => {
+    onAutoSubmitRef.current = onAutoSubmit
+  }, [onAutoSubmit])
   const canvasRef = useRef<HTMLCanvasElement>(document.createElement('canvas'))
   const [violations, setViolations] = useState<Violation[]>([])
   const [isMonitoring, setIsMonitoring] = useState(false)
   const [aiLoaded, setAiLoaded] = useState(false)
   const [tabSwitchCount, setTabSwitchCount] = useState(0)
   const [criticalViolationCount, setCriticalViolationCount] = useState(0)
-  const monitoringInterval = useRef<NodeJS.Timeout>()
+  const monitoringInterval = useRef<NodeJS.Timeout | undefined>(undefined)
   const lastViolationTime = useRef<number>(0)
 
-  // Initialize Gemini AI
+  // Initialize Local AI Models
   useEffect(() => {
     if (!isActive) return
     const initAI = async () => {
-      const key = geminiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyB4nZ8530P1aMgXAH8h1iKPhW6eDczUZbA'
-      await geminiProctoring.initialize(key)
-      setAiLoaded(true)
-      console.log('✅ Gemini AI Proctoring initialized')
+      try {
+        await tf.ready() // Force TFJS to initialize WebGL backend before trying to load models
+        await Promise.all([
+          objectDetectionAI.initialize(),
+          faceDetectionAI.initialize()
+        ])
+        setAiLoaded(true)
+        console.log('✅ Local TensorFlow AI Proctoring initialized')
 
-      voiceWarning.enable()
-      voiceWarning.info('AI proctoring system activated. Please remain in front of the camera.')
+        voiceWarning.enable()
+        voiceWarning.info('AI proctoring system activated. Please remain in front of the camera.')
+      } catch (e) {
+        console.error("AI Initialization failed:", e)
+      }
     }
 
     initAI()
-  }, [geminiKey, isActive])
+  }, [isActive])
 
   // Add violation with voice warning
   const addViolation = useCallback((violation: Violation) => {
@@ -45,9 +59,9 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
       const newViolations = [...prev, violation]
 
       // Auto-terminate after 5 violations
-      if (newViolations.length >= 5 && onAutoSubmit) {
+      if (newViolations.length >= 5) {
         voiceWarning.critical('Too many violations detected. Your exam is being terminated and submitted automatically.')
-        setTimeout(() => onAutoSubmit(), 2000)
+        setTimeout(() => { if (onAutoSubmitRef.current) onAutoSubmitRef.current() }, 2000)
         return newViolations
       }
 
@@ -61,9 +75,9 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
         voiceWarning.critical(violation.description)
         setCriticalViolationCount(prev => {
           const newCount = prev + 1
-          if (newCount >= 3 && onAutoSubmit) {
+          if (newCount >= 3) {
             voiceWarning.critical('Multiple critical violations detected. Exam will be submitted automatically.')
-            setTimeout(() => onAutoSubmit(), 3000)
+            setTimeout(() => { if (onAutoSubmitRef.current) onAutoSubmitRef.current() }, 3000)
           }
           return newCount
         })
@@ -74,7 +88,7 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
       }
       lastViolationTime.current = now
     }
-  }, [onAutoSubmit])
+  }, []) // No longer depends on onAutoSubmit because of ref
 
   // Start camera
   const startCamera = useCallback(async () => {
@@ -100,35 +114,38 @@ export function useProctoringMonitor(examId: string, isActive: boolean, onAutoSu
     }
   }, [])
 
-  // Monitor with Gemini AI
+  // Monitor with Local AI Models
   const monitorFrame = useCallback(async () => {
-    if (!videoRef.current || !aiLoaded || !isMonitoring) return
+    if (!videoRef.current || !aiLoaded) return // Removed isMonitoring check to prevent stale closure bugs
 
     try {
-      const ctx = canvasRef.current.getContext('2d')
-      if (!ctx) return
-
-      canvasRef.current.width = videoRef.current.videoWidth
-      canvasRef.current.height = videoRef.current.videoHeight
-      ctx.drawImage(videoRef.current, 0, 0)
-
-      const imageData = canvasRef.current.toDataURL('image/jpeg', 0.6)
-
-      const result = await geminiProctoring.analyzeFrame(imageData)
-
-      if (!result.isValid && result.violations.length > 0) {
-        result.violations.forEach(v => {
-          addViolation({
-            type: v.type,
-            severity: v.severity,
-            description: v.description,
-            timestamp: new Date().toISOString(),
-            confidence: v.confidence
-          })
+      // 1. Detect objects (phones, laptops, multiple people)
+      const objectResult = await objectDetectionAI.detectObjects(videoRef.current)
+      if (objectResult && objectResult.violations && objectResult.violations.length > 0) {
+        objectResult.violations.forEach((v: any) => {
+          addViolation(v)
         })
       }
+
+      // 2. Detect faces and head pose
+      const faceResult = await faceDetectionAI.detectFaces(videoRef.current)
+      if (faceResult) {
+        if (faceResult.violation) {
+          addViolation(faceResult.violation)
+        } else if (faceResult.faceCount === 1) {
+          // If only 1 face, check if looking away
+          const positionViolation = await faceDetectionAI.analyzeFacePosition(
+            faceResult.faces, 
+            videoRef.current.videoWidth, 
+            videoRef.current.videoHeight
+          )
+          if (positionViolation) {
+            addViolation(positionViolation)
+          }
+        }
+      }
     } catch (error) {
-      console.error('Gemini AI Monitoring error:', error)
+      console.error('Local AI Monitoring error:', error)
     }
   }, [aiLoaded, isMonitoring, addViolation])
 

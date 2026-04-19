@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { riskScoringAI } from '@/lib/ai/risk-scoring'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -19,10 +20,16 @@ export async function POST(
   try {
     const { id: examId } = await params
     const { attemptId, answers, violations, duration, candidateId } = await request.json()
+    console.log(`[Submit API] Received submission for attempt ${attemptId}. Violations count: ${violations?.length || 0}`)
+    if (violations && violations.length > 0) {
+      console.log(`[Submit API] Violations sample:`, JSON.stringify(violations.slice(0, 2)))
+    }
 
     if (!attemptId) {
       return NextResponse.json({ error: 'Attempt ID required' }, { status: 400 })
     }
+
+    const riskMetrics = riskScoringAI.calculateRiskScore(violations || [], duration)
 
     // Update exam attempt - DO NOT calculate score yet
     const { error: updateError } = await supabaseAdmin
@@ -33,7 +40,8 @@ export async function POST(
         submitted_at: new Date().toISOString(),
         status: 'submitted',
         evaluated: false,
-        result_published: false
+        result_published: false,
+        risk_score: riskMetrics.riskScore || 0
       })
       .eq('id', attemptId)
       .eq('candidate_id', candidateId)
@@ -55,7 +63,12 @@ export async function POST(
         metadata: v
       }))
 
-      await supabaseAdmin.from('violations').insert(violationRecords)
+      const { error: insertError } = await supabaseAdmin.from('violations').insert(violationRecords)
+      if (insertError) {
+        console.error('[Submit API] Failed to insert violations:', insertError)
+      } else {
+        console.log(`[Submit API] Successfully inserted ${violationRecords.length} violations`)
+      }
     }
 
     return NextResponse.json({ 

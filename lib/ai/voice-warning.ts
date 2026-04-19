@@ -40,8 +40,12 @@ export class VoiceWarningService {
         console.log('✅ Speech ended')
       }
       
-      utterance.onerror = (e) => {
-        console.error('❌ Speech error:', e)
+      utterance.onerror = (e: any) => {
+        if (e.error === 'not-allowed' || e.error === 'interrupted') {
+          console.warn(`🔇 Voice warning suppressed (${e.error}): Requires user interaction first.`);
+        } else {
+          console.warn(`🔇 Speech error encountered:`, e.error || 'Unknown error');
+        }
       }
 
       this.synth.speak(utterance)

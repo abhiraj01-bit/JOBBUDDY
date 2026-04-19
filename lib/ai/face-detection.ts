@@ -79,14 +79,26 @@ export class FaceDetectionAI {
     const normalizedX = centerX / canvasWidth
     const normalizedY = centerY / canvasHeight
 
-    // Check if face is too far from center
-    const isLookingAway = Math.abs(normalizedX - 0.5) > 0.3 || Math.abs(normalizedY - 0.5) > 0.3
+    const rightEye = face.landmarks[0]
+    const leftEye = face.landmarks[1]
+    const nose = face.landmarks[2]
 
-    if (isLookingAway) {
+    // Distance between eyes and nose (X axis) to calculate Yaw (Left/Right look)
+    const rightEyeToNoseX = Math.abs(nose[0] - rightEye[0]) || 1
+    const leftEyeToNoseX = Math.abs(leftEye[0] - nose[0]) || 1
+    const yawRatio = rightEyeToNoseX / leftEyeToNoseX
+
+    // If ratio is < 0.3 or > 3.0, the head is turned significantly sideways
+    const isHeadTurned = yawRatio < 0.4 || yawRatio > 2.5
+
+    // Check if face is entirely off-center
+    const isOffCenter = Math.abs(normalizedX - 0.5) > 0.35 || Math.abs(normalizedY - 0.5) > 0.35
+
+    if (isHeadTurned || isOffCenter) {
       return {
         type: 'LOOKING_AWAY',
-        severity: 'low',
-        description: 'Candidate looking away from screen',
+        severity: 'medium',
+        description: isHeadTurned ? 'Candidate is looking away from the screen' : 'Candidate moved out of camera focus',
         timestamp: new Date().toISOString(),
         position: { x: normalizedX, y: normalizedY }
       }
