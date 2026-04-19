@@ -29,23 +29,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'You have already enrolled for this exam. Cannot retake.' }, { status: 409 })
     }
 
-    // Convert base64 to buffer
-    const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '')
-    const buffer = Buffer.from(base64Data, 'base64')
-
-    // Save to public/faces directory
-    const filename = `face-${candidateId}-${Date.now()}.jpg`
-    const filepath = join(process.cwd(), 'public', 'faces', filename)
-    
-    try {
-      await mkdir(join(process.cwd(), 'public', 'faces'), { recursive: true })
-    } catch (err) {
-      // Directory might already exist
-    }
-    
-    await writeFile(filepath, buffer)
-
-    const faceUrl = `/faces/${filename}`
+    // Save image to database as base64 (since Vercel has a read-only filesystem)
+    const faceUrl = imageDataUrl
 
     // Store in database
     const { error } = await supabase
